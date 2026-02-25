@@ -1,18 +1,18 @@
-﻿{% extends 'base.html' %}
+{% extends 'base.html' %}
 {% load rating_tags %}
 
 {% block title %}{{ profile_user.username }} | Profile{% endblock %}
 
 {% block content %}
 <div class="row justify-content-center">
-    <div class="col-12 col-lg-8 col-xl-7">
-        <div class="card">
+    <div class="col-12 col-xl-9">
+        <div class="card profile-header mb-4">
             <div class="card-body p-4">
-                <div class="d-flex align-items-center gap-3 mb-3">
-                    <div class="bg-primary-subtle text-primary-emphasis rounded-circle d-inline-flex justify-content-center align-items-center" style="width: 72px; height: 72px; font-size: 1.8rem;">
+                <div class="d-flex flex-column flex-md-row align-items-md-center gap-3">
+                    <div class="avatar-circle" style="width: 78px; height: 78px; font-size: 1.9rem;">
                         {{ profile_user.username|first|upper }}
                     </div>
-                    <div>
+                    <div class="flex-grow-1">
                         <h1 class="h3 mb-1">{{ profile_user.username }}</h1>
                         {% if profile_user.avg_rating %}
                             <div class="fw-semibold">{{ profile_user.avg_rating|star_display }} <span class="small text-muted">({{ profile_user.avg_rating|floatformat:1 }}/5)</span></div>
@@ -20,34 +20,42 @@
                         {% else %}
                             <div class="small text-muted">No ratings yet</div>
                         {% endif %}
-                        <div class="small mt-1">
-                            <span class="badge text-bg-primary">Trust {{ profile_user.trust_score|floatformat:1 }}/100</span>
-                        </div>
+                    </div>
+                    <div>
+                        <span class="badge text-bg-primary">Trust {{ profile_user.trust_score|floatformat:1 }}/100</span>
                     </div>
                 </div>
 
-                <p class="mb-3"><strong>Bio:</strong><br>{{ profile_user.bio|default:'No bio added yet.' }}</p>
-
-                <div class="mb-3">
-                    <div class="small fw-semibold mb-2">Skills</div>
-                    {% for skill in profile_user.skills.all %}
-                        <span class="badge text-bg-light border me-1 mb-1">{{ skill.name }}</span>
-                    {% empty %}
-                        <span class="text-muted small">No skills listed yet.</span>
-                    {% endfor %}
-                </div>
+                <div class="section-divider"></div>
 
                 <div class="row g-3">
-                    <div class="col-6">
-                        <div class="p-3 border rounded-3 text-center">
-                            <div class="small text-muted">Requests Posted</div>
-                            <div class="h4 mb-0">{{ posted_count }}</div>
+                    <div class="col-12 col-lg-7">
+                        <div class="small fw-semibold text-uppercase text-muted mb-1">Bio</div>
+                        <p class="mb-0">{{ profile_user.bio|default:'No bio added yet.' }}</p>
+                    </div>
+                    <div class="col-12 col-lg-5">
+                        <div class="small fw-semibold text-uppercase text-muted mb-1">Skills</div>
+                        <div class="d-flex flex-wrap gap-1">
+                            {% for skill in profile_user.skills.all %}
+                                <span class="badge badge-soft">{{ skill.name }}</span>
+                            {% empty %}
+                                <span class="text-muted small">No skills listed yet.</span>
+                            {% endfor %}
                         </div>
                     </div>
-                    <div class="col-6">
-                        <div class="p-3 border rounded-3 text-center">
-                            <div class="small text-muted">Requests Helped</div>
-                            <div class="h4 mb-0">{{ helped_count }}</div>
+                </div>
+
+                <div class="row g-3 mt-1 tile-grid">
+                    <div class="col-12 col-sm-6">
+                        <div class="tile text-center">
+                            <div class="label small text-muted text-uppercase fw-bold">Requests Posted</div>
+                            <div class="count">{{ posted_count }}</div>
+                        </div>
+                    </div>
+                    <div class="col-12 col-sm-6">
+                        <div class="tile text-center">
+                            <div class="label small text-muted text-uppercase fw-bold">Requests Helped</div>
+                            <div class="count">{{ helped_count }}</div>
                         </div>
                     </div>
                 </div>

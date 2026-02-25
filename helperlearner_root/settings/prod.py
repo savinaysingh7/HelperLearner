@@ -2,10 +2,21 @@
 from .base import *
 from decouple import config
 import dj_database_url
+from django.core.exceptions import ImproperlyConfigured
 
-DEBUG = config('DEBUG', default=False, cast=bool)
+DEBUG = False
 
-ALLOWED_HOSTS = config('ALLOWED_HOSTS', default='*', cast=lambda v: [s.strip() for s in v.split(',')])
+SECRET_KEY = config('SECRET_KEY')
+if SECRET_KEY in {'unsafe-secret-for-dev', 'dev-secret-for-helperlearner-please-change'}:
+    raise ImproperlyConfigured('Set a strong SECRET_KEY for production.')
+
+ALLOWED_HOSTS = config(
+    'ALLOWED_HOSTS',
+    default='',
+    cast=lambda v: [s.strip() for s in v.split(',') if s.strip()],
+)
+if not ALLOWED_HOSTS or '*' in ALLOWED_HOSTS:
+    raise ImproperlyConfigured('Set ALLOWED_HOSTS to explicit production hostnames (no wildcard).')
 
 DATABASES = {
     'default': dj_database_url.config(
@@ -17,6 +28,7 @@ DATABASES = {
 
 # Recommended production security
 SECURE_SSL_REDIRECT = config('SECURE_SSL_REDIRECT', default=True, cast=bool)
+SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
 SESSION_COOKIE_SECURE = True
 CSRF_COOKIE_SECURE = True
 SECURE_HSTS_SECONDS = config('SECURE_HSTS_SECONDS', default=31536000, cast=int)

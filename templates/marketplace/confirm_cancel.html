@@ -1,13 +1,13 @@
-﻿{% extends 'base.html' %}
+{% extends 'base.html' %}
 
 {% block title %}Cancel Request | HelperLearner{% endblock %}
 
 {% block content %}
 <div class="row justify-content-center">
-    <div class="col-12 col-md-8 col-lg-6">
-        <div class="card text-center">
-            <div class="card-body p-4">
-                <div class="display-6 text-danger mb-3"><i class="bi bi-x-octagon"></i></div>
+    <div class="col-12 col-lg-6">
+        <div class="card confirm-card text-center">
+            <div class="card-body p-4 p-md-5">
+                <div class="confirm-icon danger mx-auto"><i class="bi bi-x-octagon"></i></div>
                 <h1 class="h4 mb-3">Cancel this request?</h1>
                 <p class="text-muted">Canceling <strong>{{ req.title }}</strong> refunds <strong>{{ req.kp_bounty }} KP</strong> back to your balance.</p>
                 <form method="post" class="d-flex flex-column flex-sm-row gap-2 justify-content-center mt-4">

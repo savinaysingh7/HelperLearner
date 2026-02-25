@@ -3,11 +3,17 @@
 {% block title %}Saved Searches | HelperLearner{% endblock %}
 
 {% block content %}
+<section class="page-head">
+    <span class="eyebrow"><i class="bi bi-bookmarks"></i>Discovery</span>
+    <h1 class="h3">Saved Searches</h1>
+    <p class="text-muted mb-0">Save request filters and get notified when new matches appear.</p>
+</section>
+
 <div class="row g-4">
     <section class="col-12 col-lg-4">
         <div class="card form-shell h-100">
             <div class="card-body">
-                <h1 class="h5 mb-3">Create Saved Search</h1>
+                <h2 class="h5 mb-3">Create Saved Search</h2>
                 <p class="text-muted small">Get notified when new open requests match these filters.</p>
 
                 <form method="post" novalidate>
@@ -49,13 +55,13 @@
                                     <div>
                                         <div class="d-flex flex-wrap gap-2 mb-2">
                                             {% if search.query %}
-                                                <span class="badge text-bg-light border">Query: {{ search.query }}</span>
+                                                <span class="badge badge-soft">Query: {{ search.query }}</span>
                                             {% endif %}
                                             {% if search.skill %}
-                                                <span class="badge text-bg-light border">Skill: {{ search.skill.name }}</span>
+                                                <span class="badge badge-soft">Skill: {{ search.skill.name }}</span>
                                             {% endif %}
                                             {% if search.tag %}
-                                                <span class="badge text-bg-light border">Tag: #{{ search.tag.name }}</span>
+                                                <span class="badge badge-soft">Tag: #{{ search.tag.name }}</span>
                                             {% endif %}
                                             <span class="badge {% if search.is_active %}text-bg-success{% else %}text-bg-secondary{% endif %}">
                                                 {% if search.is_active %}Active{% else %}Paused{% endif %}

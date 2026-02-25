@@ -1,33 +1,33 @@
-﻿{% extends 'base.html' %}
+{% extends 'base.html' %}
 
 {% block title %}Browse Tags | HelperLearner{% endblock %}
 
 {% block content %}
-<div class="row justify-content-center">
-    <div class="col-12 col-lg-9 col-xl-8">
-        <div class="d-flex justify-content-between align-items-center mb-3">
-            <h1 class="h3 mb-0">Tag Directory</h1>
-            <a href="{% url 'skill_browse' %}" class="btn btn-outline-secondary btn-sm">Browse Skills</a>
-        </div>
-
-        <div class="card">
-            <ul class="list-group list-group-flush">
-                {% for tag in tags %}
-                    <li class="list-group-item d-flex justify-content-between align-items-center">
-                        <a href="{% url 'request_list' %}?tag={{ tag.slug }}" class="text-decoration-none fw-semibold">#{{ tag.name }}</a>
-                        <span class="badge text-bg-light border">{{ tag.request_count }} request{{ tag.request_count|pluralize }}</span>
-                    </li>
-                {% empty %}
-                    <li class="list-group-item">
-                        <div class="empty-state text-center">
-                            <div class="icon"><i class="bi bi-tags"></i></div>
-                            <h2 class="h5 mt-2">No tags available yet</h2>
-                            <p class="text-muted mb-0">Tags appear when requests are tagged.</p>
-                        </div>
-                    </li>
-                {% endfor %}
-            </ul>
-        </div>
+<section class="page-head d-flex flex-column flex-md-row justify-content-between align-items-md-end gap-2">
+    <div>
+        <span class="eyebrow"><i class="bi bi-tags"></i>Browse</span>
+        <h1 class="h3 mb-1">Tag Directory</h1>
+        <p class="text-muted mb-0">Find requests by specific technologies and topics.</p>
     </div>
+    <a href="{% url 'skill_browse' %}" class="btn btn-outline-secondary btn-sm">Browse Skills</a>
+</section>
+
+<div class="card browse-list">
+    <ul class="list-group list-group-flush">
+        {% for tag in tags %}
+            <li class="list-group-item d-flex justify-content-between align-items-center">
+                <a href="{% url 'request_list' %}?tag={{ tag.slug }}" class="text-decoration-none fw-semibold">#{{ tag.name }}</a>
+                <span class="badge badge-soft">{{ tag.request_count }} request{{ tag.request_count|pluralize }}</span>
+            </li>
+        {% empty %}
+            <li class="list-group-item">
+                <div class="empty-state text-center">
+                    <div class="icon"><i class="bi bi-tags"></i></div>
+                    <h2 class="h5 mt-2">No tags available yet</h2>
+                    <p class="text-muted mb-0">Tags appear when requests are tagged.</p>
+                </div>
+            </li>
+        {% endfor %}
+    </ul>
 </div>
 {% endblock %}

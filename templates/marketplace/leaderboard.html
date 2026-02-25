@@ -1,97 +1,96 @@
-﻿{% extends 'base.html' %}
+{% extends 'base.html' %}
 {% load rating_tags %}
 
 {% block title %}Leaderboard | HelperLearner{% endblock %}
 
 {% block content %}
-<div class="row justify-content-center">
-    <div class="col-12 col-xl-10">
-        <div class="d-flex justify-content-between align-items-center mb-3">
-            <h1 class="h3 mb-0">Leaderboard</h1>
-            <span class="text-muted small">Top 10 users by selected metric</span>
-        </div>
+<section class="page-head d-flex flex-column flex-md-row justify-content-between align-items-md-end gap-2">
+    <div>
+        <span class="eyebrow"><i class="bi bi-trophy"></i>Community Rankings</span>
+        <h1 class="h3 mb-1">Leaderboard</h1>
+        <p class="text-muted mb-0">Top 10 users by selected metric.</p>
+    </div>
+</section>
 
-        {% if hall_of_fame %}
-            <section class="card mb-4 border-warning">
-                <div class="card-body">
-                    <h2 class="h5 mb-2">Hall of Fame</h2>
-                    <p class="mb-1">
-                        <a class="fw-semibold text-decoration-none" href="{% url 'public_profile' hall_of_fame.username %}">{{ hall_of_fame.username }}</a>
-                        is the highest-rated helper of all time.
-                    </p>
-                    <div class="small text-muted">
-                        Rating: {{ hall_of_fame.avg_rating|star_display }} ({{ hall_of_fame.avg_rating|floatformat:2 }})
-                        | Ratings: {{ hall_of_fame.ratings_count }}
-                        | Helped: {{ hall_of_fame.helped_count }}
-                        | Top skill: {{ hall_of_fame.top_skill }}
-                        | Trust: {{ hall_of_fame.trust_score|floatformat:1 }}/100
-                    </div>
-                </div>
-            </section>
-        {% endif %}
-
-        <ul class="nav nav-tabs mb-3" role="tablist">
-            <li class="nav-item" role="presentation">
-                <a class="nav-link {% if tab == 'kp' %}active{% endif %}" href="{% url 'leaderboard' %}?tab=kp">Knowledge Points</a>
-            </li>
-            <li class="nav-item" role="presentation">
-                <a class="nav-link {% if tab == 'helped' %}active{% endif %}" href="{% url 'leaderboard' %}?tab=helped">Requests Helped</a>
-            </li>
-            <li class="nav-item" role="presentation">
-                <a class="nav-link {% if tab == 'rating' %}active{% endif %}" href="{% url 'leaderboard' %}?tab=rating">Average Rating</a>
-            </li>
-        </ul>
-
-        <div class="card">
-            <div class="table-responsive">
-                <table class="table align-middle mb-0">
-                    <thead>
-                        <tr>
-                            <th>Rank</th>
-                            <th>User</th>
-                            <th>Top Skill</th>
-                            <th>Stats</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        {% for row in active_leaders %}
-                            <tr>
-                                <td>#{{ forloop.counter }}</td>
-                                <td><a class="text-decoration-none fw-semibold" href="{% url 'public_profile' row.username %}">{{ row.username }}</a></td>
-                                <td>{{ row.top_skill }}</td>
-                                <td>
-                                    {% if tab == 'kp' %}
-                                        {{ row.knowledge_points }} KP
-                                    {% elif tab == 'helped' %}
-                                        {{ row.helped_count }} resolved request{{ row.helped_count|pluralize }}
-                                    {% else %}
-                                        {% if row.avg_rating %}
-                                            {{ row.avg_rating|star_display }} ({{ row.avg_rating|floatformat:2 }}) from {{ row.ratings_count }} rating{{ row.ratings_count|pluralize }}
-                                        {% else %}
-                                            No ratings yet
-                                        {% endif %}
-                                    {% endif %}
-                                    <div class="small text-muted mt-1">Trust {{ row.trust_score|floatformat:1 }}/100</div>
-                                    <div class="progress progress-thin mt-1">
-                                        <div class="progress-bar bg-primary" style="width: {{ row.trust_score|floatformat:0 }}%"></div>
-                                    </div>
-                                </td>
-                            </tr>
-                        {% empty %}
-                            <tr>
-                                <td colspan="4">
-                                    <div class="empty-state text-center my-3">
-                                        <div class="icon"><i class="bi bi-trophy"></i></div>
-                                        <h2 class="h5 mt-2">No leaderboard entries yet</h2>
-                                        <p class="text-muted mb-0">Once users start helping and earning ratings, rankings appear here.</p>
-                                    </div>
-                                </td>
-                            </tr>
-                        {% endfor %}
-                    </tbody>
-                </table>
+{% if hall_of_fame %}
+    <section class="card hall-of-fame mb-4">
+        <div class="card-body">
+            <h2 class="h5 mb-2">Hall of Fame</h2>
+            <p class="mb-1">
+                <a class="fw-semibold text-decoration-none" href="{% url 'public_profile' hall_of_fame.username %}">{{ hall_of_fame.username }}</a>
+                is the highest-rated helper of all time.
+            </p>
+            <div class="small text-muted">
+                Rating: {{ hall_of_fame.avg_rating|star_display }} ({{ hall_of_fame.avg_rating|floatformat:2 }})
+                | Ratings: {{ hall_of_fame.ratings_count }}
+                | Helped: {{ hall_of_fame.helped_count }}
+                | Top skill: {{ hall_of_fame.top_skill }}
+                | Trust: {{ hall_of_fame.trust_score|floatformat:1 }}/100
             </div>
         </div>
+    </section>
+{% endif %}
+
+<ul class="nav nav-tabs mb-3" role="tablist">
+    <li class="nav-item" role="presentation">
+        <a class="nav-link {% if tab == 'kp' %}active{% endif %}" href="{% url 'leaderboard' %}?tab=kp">Knowledge Points</a>
+    </li>
+    <li class="nav-item" role="presentation">
+        <a class="nav-link {% if tab == 'helped' %}active{% endif %}" href="{% url 'leaderboard' %}?tab=helped">Requests Helped</a>
+    </li>
+    <li class="nav-item" role="presentation">
+        <a class="nav-link {% if tab == 'rating' %}active{% endif %}" href="{% url 'leaderboard' %}?tab=rating">Average Rating</a>
+    </li>
+</ul>
+
+<div class="card">
+    <div class="table-responsive">
+        <table class="table align-middle mb-0">
+            <thead>
+                <tr>
+                    <th>Rank</th>
+                    <th>User</th>
+                    <th>Top Skill</th>
+                    <th>Stats</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for row in active_leaders %}
+                    <tr>
+                        <td>#{{ forloop.counter }}</td>
+                        <td><a class="text-decoration-none fw-semibold" href="{% url 'public_profile' row.username %}">{{ row.username }}</a></td>
+                        <td>{{ row.top_skill }}</td>
+                        <td>
+                            {% if tab == 'kp' %}
+                                {{ row.knowledge_points }} KP
+                            {% elif tab == 'helped' %}
+                                {{ row.helped_count }} resolved request{{ row.helped_count|pluralize }}
+                            {% else %}
+                                {% if row.avg_rating %}
+                                    {{ row.avg_rating|star_display }} ({{ row.avg_rating|floatformat:2 }}) from {{ row.ratings_count }} rating{{ row.ratings_count|pluralize }}
+                                {% else %}
+                                    No ratings yet
+                                {% endif %}
+                            {% endif %}
+                            <div class="small text-muted mt-1">Trust {{ row.trust_score|floatformat:1 }}/100</div>
+                            <div class="progress progress-thin mt-1">
+                                <div class="progress-bar bg-primary" style="width: {{ row.trust_score|floatformat:0 }}%"></div>
+                            </div>
+                        </td>
+                    </tr>
+                {% empty %}
+                    <tr>
+                        <td colspan="4">
+                            <div class="empty-state text-center my-3">
+                                <div class="icon"><i class="bi bi-trophy"></i></div>
+                                <h2 class="h5 mt-2">No leaderboard entries yet</h2>
+                                <p class="text-muted mb-0">Once users start helping and earning ratings, rankings appear here.</p>
+                            </div>
+                        </td>
+                    </tr>
+                {% endfor %}
+            </tbody>
+        </table>
     </div>
 </div>
 {% endblock %}

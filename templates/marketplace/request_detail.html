@@ -1,4 +1,4 @@
-﻿{% extends 'base.html' %}
+{% extends 'base.html' %}
 {% load rating_tags discovery_tags %}
 
 {% block title %}{{ req.title }} | HelperLearner{% endblock %}
@@ -7,7 +7,7 @@
 <div class="row justify-content-center">
     <div class="col-12 col-xl-10">
         <nav aria-label="breadcrumb" class="mb-3">
-            <ol class="breadcrumb">
+            <ol class="breadcrumb mb-0">
                 <li class="breadcrumb-item"><a href="{% url 'request_list' %}">Browse</a></li>
                 <li class="breadcrumb-item active" aria-current="page">Request Details</li>
             </ol>
@@ -15,24 +15,39 @@
 
         <article class="card request-card request-detail-card mb-4">
             <div class="card-body p-4">
-                <div class="d-flex flex-column flex-md-row justify-content-between gap-3 align-items-md-start">
-                    <h1 class="h3 mb-0">{{ req.title }}</h1>
+                <div class="d-flex flex-column flex-lg-row justify-content-between gap-3 align-items-lg-start mb-3">
+                    <div>
+                        <h1 class="h3 mb-2">{{ req.title }}</h1>
+                        <p class="text-muted mb-0">
+                            Posted by <strong><a class="text-decoration-none" href="{% url 'public_profile' req.user.username %}">{{ req.user.username }}</a></strong>
+                        </p>
+                    </div>
                     <div class="d-flex flex-wrap gap-2">
                         <span class="badge {% if req.status == 'open' %}text-bg-success{% elif req.status == 'resolved' or req.status == 'canceled' %}text-bg-secondary{% else %}text-bg-warning{% endif %}">{{ req.get_status_display }}</span>
                         <span class="badge {{ req.expires_at|expiry_badge_class }}">{{ req.expires_at|expires_in_days }}</span>
                     </div>
                 </div>
 
-                <p class="text-muted mt-2 mb-2">
-                    Posted by <strong><a class="text-decoration-none" href="{% url 'public_profile' req.user.username %}">{{ req.user.username }}</a></strong>
-                    {% if req.skill_needed %}
-                        in <span class="badge text-bg-light border">{{ req.skill_needed }}</span>
-                    {% endif %}
-                </p>
+                <div class="request-meta-grid mb-3">
+                    <div class="meta-tile">
+                        <div class="label">Reward Bounty</div>
+                        <div class="value text-success">{{ req.kp_bounty }} KP</div>
+                    </div>
+                    <div class="meta-tile">
+                        <div class="label">Skill Needed</div>
+                        <div class="value">
+                            {% if req.skill_needed %}
+                                <span class="badge badge-soft">{{ req.skill_needed }}</span>
+                            {% else %}
+                                <span class="text-muted">Not specified</span>
+                            {% endif %}
+                        </div>
+                    </div>
+                </div>
 
                 <div class="d-flex flex-wrap gap-2 mb-3">
                     {% for tag in req.tags.all %}
-                        <a href="{% url 'request_list' %}?tag={{ tag.slug }}" class="badge rounded-pill text-bg-light border text-decoration-none">#{{ tag.name }}</a>
+                        <a href="{% url 'request_list' %}?tag={{ tag.slug }}" class="badge rounded-pill badge-soft text-decoration-none">#{{ tag.name }}</a>
                     {% empty %}
                         <span class="text-muted small">No tags added.</span>
                     {% endfor %}
@@ -41,10 +56,17 @@
                 <h2 class="h5">Description</h2>
                 <p class="mb-4">{{ req.description }}</p>
 
-                <section class="surface-block p-3 rounded-4 d-flex flex-column flex-md-row justify-content-between gap-3 align-items-md-center">
-                    <div>
-                        <div class="text-muted small">Reward Bounty</div>
-                        <div class="h4 text-success mb-0">{{ req.kp_bounty }} KP</div>
+                <section class="surface-block p-3 d-flex flex-column flex-lg-row justify-content-between gap-3 align-items-lg-center">
+                    <div class="small text-muted">
+                        {% if req.status == 'open' %}
+                            Open for helpers to claim.
+                        {% elif req.status == 'in_progress' %}
+                            Currently being solved by {{ req.accepted_by.username }}.
+                        {% elif req.status == 'resolved' %}
+                            Resolved and KP transferred successfully.
+                        {% else %}
+                            Canceled and escrow refunded.
+                        {% endif %}
                     </div>
 
                     <div class="d-flex flex-wrap gap-2">
@@ -60,7 +82,6 @@
                                 <a href="{% url 'delete_request' req.pk %}" class="btn btn-danger">Delete</a>
                             {% endif %}
                         {% elif req.status == 'in_progress' %}
-                            <span class="fw-semibold text-warning-emphasis align-self-center">Being solved by {{ req.accepted_by.username }}</span>
                             {% if user == req.user %}
                                 <a href="{% url 'resolve_request' req.pk %}" class="btn btn-success">Mark Resolved</a>
                                 <a href="{% url 'cancel_request' req.pk %}" class="btn btn-outline-danger">Cancel</a>
@@ -136,7 +157,7 @@
                                     {% endif %}
                                 {% endif %}
 
-                                <button type="submit" class="btn btn-secondary">Post Comment</button>
+                                <button type="submit" class="btn btn-primary">Post Comment</button>
                             </form>
                         </div>
                     </div>
