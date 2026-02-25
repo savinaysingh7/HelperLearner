@@ -32,16 +32,32 @@
                 <div class="collapse navbar-collapse" id="mainNav">
                     <ul class="navbar-nav me-auto mb-2 mb-lg-0">
                         <li class="nav-item">
-                            <a class="nav-link {% if current_name == 'home' %}active{% endif %}" href="{% url 'home' %}">Home</a>
+                            <a
+                                class="nav-link {% if current_name == 'home' %}active{% endif %}"
+                                href="{% url 'home' %}"
+                                {% if current_name == 'home' %}aria-current="page"{% endif %}
+                            >Home</a>
                         </li>
                         <li class="nav-item">
-                            <a class="nav-link {% if current_name == 'request_list' or current_name == 'request_detail' %}active{% endif %}" href="{% url 'request_list' %}">Browse</a>
+                            <a
+                                class="nav-link {% if current_name == 'request_list' or current_name == 'request_detail' or current_name == 'claim_request' or current_name == 'resolve_request' or current_name == 'cancel_request' or current_name == 'delete_request' or current_name == 'rate_request' %}active{% endif %}"
+                                href="{% url 'request_list' %}"
+                                {% if current_name == 'request_list' or current_name == 'request_detail' or current_name == 'claim_request' or current_name == 'resolve_request' or current_name == 'cancel_request' or current_name == 'delete_request' or current_name == 'rate_request' %}aria-current="page"{% endif %}
+                            >Browse</a>
                         </li>
                         <li class="nav-item">
-                            <a class="nav-link {% if current_name == 'create_request' %}active{% endif %}" href="{% url 'create_request' %}">Post</a>
+                            <a
+                                class="nav-link {% if current_name == 'create_request' or current_name == 'edit_request' %}active{% endif %}"
+                                href="{% url 'create_request' %}"
+                                {% if current_name == 'create_request' or current_name == 'edit_request' %}aria-current="page"{% endif %}
+                            >Post</a>
                         </li>
                         <li class="nav-item">
-                            <a class="nav-link {% if current_name == 'leaderboard' %}active{% endif %}" href="{% url 'leaderboard' %}">Leaderboard</a>
+                            <a
+                                class="nav-link {% if current_name == 'leaderboard' %}active{% endif %}"
+                                href="{% url 'leaderboard' %}"
+                                {% if current_name == 'leaderboard' %}aria-current="page"{% endif %}
+                            >Leaderboard</a>
                         </li>
                         <li class="nav-item dropdown">
                             <a class="nav-link dropdown-toggle {% if current_name == 'skill_browse' or current_name == 'tag_browse' or current_name == 'search' %}active{% endif %}" href="#" role="button" data-bs-toggle="dropdown" aria-expanded="false">
@@ -82,11 +98,11 @@
                                     {% endif %}
                                 </button>
                                 <ul class="dropdown-menu dropdown-menu-end">
-                                    <li><a class="dropdown-item" href="{% url 'dashboard' %}">Dashboard</a></li>
-                                    <li><a class="dropdown-item" href="{% url 'activity_feed' %}">Activity Feed</a></li>
-                                    <li><a class="dropdown-item" href="{% url 'saved_searches' %}">Saved Searches</a></li>
-                                    <li><a class="dropdown-item" href="{% url 'notification_list' %}">Notifications</a></li>
-                                    <li><a class="dropdown-item" href="{% url 'profile' %}">My Profile</a></li>
+                                    <li><a class="dropdown-item {% if current_name == 'dashboard' %}active{% endif %}" href="{% url 'dashboard' %}">Dashboard</a></li>
+                                    <li><a class="dropdown-item {% if current_name == 'activity_feed' %}active{% endif %}" href="{% url 'activity_feed' %}">Activity Feed</a></li>
+                                    <li><a class="dropdown-item {% if current_name == 'saved_searches' %}active{% endif %}" href="{% url 'saved_searches' %}">Saved Searches</a></li>
+                                    <li><a class="dropdown-item {% if current_name == 'notification_list' %}active{% endif %}" href="{% url 'notification_list' %}">Notifications</a></li>
+                                    <li><a class="dropdown-item {% if current_name == 'profile' %}active{% endif %}" href="{% url 'profile' %}">My Profile</a></li>
                                     <li><hr class="dropdown-divider"></li>
                                     <li>
                                         <form action="{% url 'logout' %}" method="post" class="m-0 px-2">
