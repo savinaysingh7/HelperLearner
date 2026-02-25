@@ -1,44 +1,48 @@
-﻿{% extends 'base.html' %}
+{% extends 'base.html' %}
 {% load rating_tags %}
 
 {% block title %}Dashboard | HelperLearner{% endblock %}
 
 {% block content %}
-<div class="row g-4">
-    <div class="col-12">
-        <h1 class="h3 mb-0">My Dashboard</h1>
-        <p class="text-muted">Your KP and activity insights for the last 6 months.</p>
-    </div>
+<section class="page-head">
+    <span class="eyebrow"><i class="bi bi-speedometer2"></i>Personal Analytics</span>
+    <h1 class="h2">My Dashboard</h1>
+    <p class="text-muted mb-0">Your KP and activity insights for the last 6 months.</p>
+</section>
 
+<div class="row g-3 mb-4">
     <div class="col-12 col-md-6 col-xl-3">
         <div class="card metric-card h-100">
             <div class="card-body">
-                <div class="small text-muted">Total KP Earned</div>
-                <div class="h2 text-success mb-0">{{ total_kp_earned }}</div>
+                <div class="metric-label">Total KP Earned</div>
+                <div class="metric-value text-success">{{ total_kp_earned }}</div>
+                <div class="small text-muted mt-1">Resolved requests you completed.</div>
             </div>
         </div>
     </div>
     <div class="col-12 col-md-6 col-xl-3">
         <div class="card metric-card h-100">
             <div class="card-body">
-                <div class="small text-muted">Total KP Spent</div>
-                <div class="h2 text-danger mb-0">{{ total_kp_spent }}</div>
+                <div class="metric-label">Total KP Spent</div>
+                <div class="metric-value text-danger">{{ total_kp_spent }}</div>
+                <div class="small text-muted mt-1">Resolved or canceled requests you posted.</div>
             </div>
         </div>
     </div>
     <div class="col-12 col-md-6 col-xl-3">
         <div class="card metric-card h-100">
             <div class="card-body">
-                <div class="small text-muted">Requests Posted / Helped</div>
-                <div class="h2 mb-0">{{ requests_posted_count }} / {{ requests_helped_count }}</div>
+                <div class="metric-label">Posted / Helped</div>
+                <div class="metric-value">{{ requests_posted_count }} / {{ requests_helped_count }}</div>
+                <div class="small text-muted mt-1">Total request participation.</div>
             </div>
         </div>
     </div>
     <div class="col-12 col-md-6 col-xl-3">
         <div class="card metric-card h-100">
             <div class="card-body">
-                <div class="small text-muted">Success Rate</div>
-                <div class="h2 mb-0">{{ success_rate }}%</div>
+                <div class="metric-label">Success Rate</div>
+                <div class="metric-value">{{ success_rate }}%</div>
                 <div class="small text-muted mt-1">
                     {% if average_rating_received %}
                         {{ average_rating_received|star_display }} ({{ average_rating_received|floatformat:1 }})
@@ -49,67 +53,76 @@
             </div>
         </div>
     </div>
+</div>
 
-    <div class="col-12">
-        <div class="row g-3">
-            <div class="col-12 col-md-6">
-                <div class="card h-100 border-success-subtle">
-                    <div class="card-body">
-                        <h2 class="h5">Daily Bonus</h2>
+<div class="row g-3 mb-4">
+    <div class="col-12 col-md-6">
+        <div class="surface-card h-100">
+            <div class="card-body p-4">
+                <div class="d-flex justify-content-between align-items-start gap-3">
+                    <div>
+                        <h2 class="h5 mb-1">Daily Bonus</h2>
                         {% if next_bonus_hours == 0 %}
                             <p class="text-muted mb-3">You can claim your +10 KP bonus now.</p>
                         {% else %}
                             <p class="text-muted mb-3">Next bonus in {{ next_bonus_hours }} hour{{ next_bonus_hours|pluralize }}.</p>
                         {% endif %}
-                        <a href="{% url 'claim_daily_kp' %}" class="btn btn-outline-success">Go to Daily Bonus</a>
                     </div>
+                    <span class="badge text-bg-success"><i class="bi bi-coin me-1"></i>+10 KP</span>
                 </div>
-            </div>
-            <div class="col-12 col-md-6">
-                <div class="card h-100 border-primary-subtle">
-                    <div class="card-body">
-                        <h2 class="h5">Transfer KP</h2>
-                        <p class="text-muted mb-3">Send KP to another user using a confirmation step.</p>
-                        <a href="{% url 'transfer_kp' %}" class="btn btn-outline-primary">Transfer KP</a>
-                    </div>
-                </div>
+                <a href="{% url 'claim_daily_kp' %}" class="btn btn-outline-primary">Go to Daily Bonus</a>
             </div>
         </div>
     </div>
-
-    <div class="col-12">
-        <div class="card">
-            <div class="card-body">
-                <h2 class="h5 mb-3">Activity by Month (Last 6 Months)</h2>
-                <div class="table-responsive">
-                    <table class="table align-middle mb-0">
-                        <thead>
-                            <tr>
-                                <th scope="col">Month</th>
-                                <th scope="col">Posted</th>
-                                <th scope="col">Helped</th>
-                                <th scope="col">Total</th>
-                                <th scope="col" style="min-width: 260px;">Activity Bar</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            {% for item in monthly_activity %}
-                                <tr>
-                                    <td>{{ item.label }}</td>
-                                    <td>{{ item.posted_count }}</td>
-                                    <td>{{ item.helped_count }}</td>
-                                    <td>{{ item.total_count }}</td>
-                                    <td>
-                                        <div class="progress" role="progressbar" aria-label="Activity for {{ item.label }}" aria-valuenow="{{ item.progress_pct }}" aria-valuemin="0" aria-valuemax="100">
-                                            <div class="progress-bar bg-info" style="width: {{ item.progress_pct }}%;">{{ item.progress_pct|floatformat:0 }}%</div>
-                                        </div>
-                                    </td>
-                                </tr>
-                            {% endfor %}
-                        </tbody>
-                    </table>
+    <div class="col-12 col-md-6">
+        <div class="surface-card h-100">
+            <div class="card-body p-4">
+                <div class="d-flex justify-content-between align-items-start gap-3">
+                    <div>
+                        <h2 class="h5 mb-1">Transfer KP</h2>
+                        <p class="text-muted mb-3">Send KP to another user with a confirmation step.</p>
+                    </div>
+                    <span class="badge text-bg-primary"><i class="bi bi-arrow-left-right me-1"></i>Secure</span>
                 </div>
+                <a href="{% url 'transfer_kp' %}" class="btn btn-outline-primary">Transfer KP</a>
             </div>
+        </div>
+    </div>
+</div>
+
+<div class="card">
+    <div class="card-body">
+        <div class="d-flex flex-column flex-md-row justify-content-between align-items-md-center gap-2 mb-3">
+            <h2 class="h5 mb-0">Activity by Month (Last 6 Months)</h2>
+            <span class="small text-muted">Posted + resolved helped requests</span>
+        </div>
+        <div class="table-responsive">
+            <table class="table align-middle mb-0">
+                <thead>
+                    <tr>
+                        <th scope="col">Month</th>
+                        <th scope="col">Posted</th>
+                        <th scope="col">Helped</th>
+                        <th scope="col">Total</th>
+                        <th scope="col" style="min-width: 260px;">Activity Bar</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for item in monthly_activity %}
+                        <tr>
+                            <td>{{ item.label }}</td>
+                            <td>{{ item.posted_count }}</td>
+                            <td>{{ item.helped_count }}</td>
+                            <td>{{ item.total_count }}</td>
+                            <td>
+                                <div class="progress" role="progressbar" aria-label="Activity for {{ item.label }}" aria-valuenow="{{ item.progress_pct }}" aria-valuemin="0" aria-valuemax="100">
+                                    <div class="progress-bar bg-info" style="width: {{ item.progress_pct }}%;">{{ item.progress_pct|floatformat:0 }}%</div>
+                                </div>
+                            </td>
+                        </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
         </div>
     </div>
 </div>

@@ -98,3 +98,11 @@ Run the full test suite:
 ```bash
 python manage.py test
 ```
+
+## Product Roadmap Ideas
+- Dispute workflow for resolved requests (admin-reviewed partial or full refund paths).
+- Moderation/report queue for requests/comments/profiles with admin actions and history.
+- File/snippet attachments with type and size controls.
+- Saved-search email digests and per-user notification preferences.
+- Milestone-based request payouts with staged KP release.
+- API keys for third-party integrations and usage limits.
