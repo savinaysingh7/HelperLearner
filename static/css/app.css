@@ -158,6 +158,11 @@ a:hover {
     background: #eff6ff;
 }
 
+.dropdown-item.active {
+    color: #0f172a;
+    background: #e6efff;
+}
+
 .nav-search {
     min-width: 290px;
 }
@@ -202,6 +207,10 @@ a:hover {
 
 .nav-user-btn {
     font-weight: 700;
+    max-width: 220px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
 }
 
 .app-header .btn-outline-light {
@@ -312,6 +321,13 @@ a:hover {
     padding: 0.35rem 0.72rem;
 }
 
+.hero-note {
+    border: 1px solid rgba(255, 255, 255, 0.35);
+    border-radius: 0.95rem;
+    background: rgba(15, 23, 42, 0.22);
+    color: #fff;
+}
+
 .stat-card {
     border: 1px solid rgba(255, 255, 255, 0.27);
     background: rgba(255, 255, 255, 0.14);
@@ -341,13 +357,32 @@ a:hover {
     border-radius: var(--hl-radius-lg);
     background: var(--hl-surface);
     box-shadow: var(--hl-shadow-sm);
-    transition: transform 0.2s ease, box-shadow 0.2s ease, border-color 0.2s ease;
+    transition: box-shadow 0.2s ease, border-color 0.2s ease;
 }
 
 .card:hover {
-    transform: translateY(-2px);
     box-shadow: var(--hl-shadow-md);
     border-color: #c8d7e7;
+}
+
+.request-card,
+.saved-search-item,
+.search-result-item,
+.notification-item,
+.feed-item,
+.card.hover-lift,
+.tile-grid .tile {
+    transition: transform 0.2s ease, box-shadow 0.2s ease, border-color 0.2s ease;
+}
+
+.request-card:hover,
+.saved-search-item:hover,
+.search-result-item:hover,
+.notification-item:hover,
+.feed-item:hover,
+.card.hover-lift:hover {
+    transform: translateY(-2px);
+    box-shadow: var(--hl-shadow-md);
 }
 
 .card .card-header {
@@ -483,6 +518,10 @@ a:hover {
 .notification-item.unread {
     border-color: #bfdbfe;
     background: #f7fbff;
+}
+
+.notification-item:last-child {
+    margin-bottom: 0;
 }
 
 .private-comment {
@@ -675,6 +714,10 @@ a:hover {
     padding: 0.86rem 0.75rem;
 }
 
+.table-responsive {
+    border-radius: 0.95rem;
+}
+
 .table tbody tr:hover {
     background: #f8fbff;
 }
@@ -824,8 +867,10 @@ mark {
 @media (max-width: 991.98px) {
     .app-header .navbar-collapse {
         margin-top: 0.75rem;
-        border-top: 1px solid #e2eaf3;
-        padding-top: 0.75rem;
+        border: 1px solid #e2eaf3;
+        background: rgba(255, 255, 255, 0.95);
+        border-radius: 0.9rem;
+        padding: 0.75rem;
     }
 
     .nav-search {
@@ -843,6 +888,10 @@ mark {
 }
 
 @media (max-width: 767.98px) {
+    .search-kbd {
+        display: none !important;
+    }
+
     .hero-actions {
         width: 100%;
     }
@@ -869,5 +918,9 @@ mark {
 
     .metric-card .metric-value {
         font-size: 1.6rem;
+    }
+
+    .nav-user-btn {
+        max-width: 100%;
     }
 }

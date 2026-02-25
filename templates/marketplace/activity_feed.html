@@ -71,7 +71,7 @@
                         <a href="{% url 'request_detail' req.pk %}" class="fw-semibold text-decoration-none d-block mb-1">{{ req.title }}</a>
                         <div class="small text-muted mb-2">Posted by {{ req.user.username }}</div>
                         <div class="d-flex justify-content-between align-items-center">
-                            <span class="badge badge-soft">{{ req.skill_needed }}</span>
+                            <span class="badge badge-soft">{{ req.skill_needed|default:'General' }}</span>
                             <span class="fw-semibold text-success">{{ req.kp_bounty }} KP</span>
                         </div>
                     </article>

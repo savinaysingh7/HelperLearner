@@ -14,7 +14,8 @@ logger = logging.getLogger(__name__)
 
 def _matching_requests(saved_search, since):
     """Return open requests matching a saved search created after `since`."""
-    queryset = HelpRequest.objects.filter(status='open', created_at__gt=since)
+    # Use gte to avoid missing same-timestamp rows on lower-resolution DB backends.
+    queryset = HelpRequest.objects.filter(status='open', created_at__gte=since)
 
     if saved_search.query:
         query = saved_search.query
