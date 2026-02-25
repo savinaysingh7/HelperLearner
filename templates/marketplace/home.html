@@ -1,0 +1,50 @@
+{% extends 'base.html' %}
+
+{% block content %}
+<div class="bg-dark text-white p-5 rounded-3 mb-5">
+    <div class="row align-items-center">
+        <div class="col-md-8">
+            <h1 class="display-4 fw-bold">HelperLearner</h1>
+            <p class="lead">Solve problems. Earn Points. Help others learn.</p>
+            <div class="d-flex gap-3 mt-4">
+                <a href="{% url 'request_list' %}" class="btn btn-primary btn-lg px-4">Browse Problems</a>
+                <a href="{% url 'create_request' %}" class="btn btn-outline-light btn-lg px-4">Post a Problem</a>
+            </div>
+        </div>
+        <div class="col-md-4 text-center">
+            <div class="row g-3">
+                <div class="col-6">
+                    <div class="p-3 border rounded">
+                        <h2 class="mb-0">{{ total_users }}</h2>
+                        <small>Devs</small>
+                    </div>
+                </div>
+                <div class="col-6">
+                    <div class="p-3 border rounded">
+                        <h2 class="mb-0">{{ open_requests }}</h2>
+                        <small>Active Problems</small>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<h3 class="mb-4">Recent Opportunities</h3>
+<div class="row">
+    {% for req in recent_requests %}
+    <div class="col-md-4 mb-3">
+        <div class="card h-100 shadow-sm border-0">
+            <div class="card-body">
+                <h6>{{ req.title }}</h6>
+                <span class="badge bg-light text-dark mb-2">{{ req.skill_needed }}</span>
+                <div class="d-flex justify-content-between align-items-center mt-3">
+                    <span class="text-success fw-bold">{{ req.kp_bounty }} KP</span>
+                    <a href="{% url 'request_detail' req.pk %}" class="btn btn-sm btn-link text-primary">Details →</a>
+                </div>
+            </div>
+        </div>
+    </div>
+    {% endfor %}
+</div>
+{% endblock %}

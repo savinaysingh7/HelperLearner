@@ -1,0 +1,14 @@
+{% extends 'base.html' %}
+{% block content %}
+<div class="card shadow-sm mx-auto mt-5" style="max-width: 500px;">
+    <div class="card-body text-center">
+        <h4 class="mb-3">Cancel Request?</h4>
+        <p class="text-muted">Are you sure you want to cancel <strong>{{ req.title }}</strong>? Your {{ req.kp_bounty }} KP will be refunded.</p>
+        <form method="post">
+            {% csrf_token %}
+            <button type="submit" class="btn btn-danger me-2">Yes, Cancel It</button>
+            <a href="{% url 'request_detail' req.pk %}" class="btn btn-secondary">Go Back</a>
+        </form>
+    </div>
+</div>
+{% endblock %}

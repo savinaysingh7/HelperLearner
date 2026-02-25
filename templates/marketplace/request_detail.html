@@ -1,0 +1,110 @@
+{% extends 'base.html' %}
+
+{% block content %}
+<div class="row justify-content-center">
+    <div class="col-md-8">
+        <nav aria-label="breadcrumb">
+            <ol class="breadcrumb">
+                <li class="breadcrumb-item"><a href="{% url 'request_list' %}">Browse</a></li>
+                <li class="breadcrumb-item active">{{ req.title }}</li>
+            </ol>
+        </nav>
+
+        <div class="card shadow-sm border-0">
+            <div class="card-body p-4">
+                <div class="d-flex justify-content-between align-items-start">
+                    <h1 class="h2">{{ req.title }}</h1>
+                    <span class="badge {% if req.status == 'open' %}bg-success{% elif req.status == 'resolved' %}bg-secondary{% else %}bg-warning text-dark{% endif %}">{{ req.get_status_display }}</span>
+                </div>
+                
+                <p class="text-muted">Posted by <strong>{{ req.user.username }}</strong> in <span class="badge bg-info text-dark">{{ req.skill_needed }}</span></p>
+                <hr>
+                
+                <h5 class="mt-4">Description</h5>
+                <p class="lead">{{ req.description }}</p>
+                
+                <div class="bg-light p-3 rounded mt-4 d-flex justify-content-between align-items-center">
+                    <span>Reward Bounty: <strong class="text-success h4">{{ req.kp_bounty }} KP</strong></span>
+                    
+                    {% if req.status == 'open' %}
+                        {% if user.is_authenticated and user != req.user %}
+                            <form action="{% url 'claim_request' req.pk %}" method="post">
+                                {% csrf_token %}
+                                <button type="submit" class="btn btn-primary btn-lg">Accept & Start Helping</button>
+                            </form>
+                        {% elif user == req.user %}
+                            <div>
+                                <span class="text-muted italic me-2">This is your own post.</span>
+                                <a href="{% url 'cancel_request' req.pk %}" class="btn btn-outline-danger btn-sm">Cancel Request</a>
+                            </div>
+                        {% endif %}
+                    {% elif req.status == 'in_progress' %}
+                        <div class="d-flex justify-content-between align-items-center w-100">
+                            <span class="text-warning fw-bold">Currently being solved by {{ req.accepted_by.username }}</span>
+                            
+                            {% if user == req.user %}
+                                <div>
+                                    <a href="{% url 'resolve_request' req.pk %}" class="btn btn-success">Mark as Resolved</a>
+                                    <a href="{% url 'cancel_request' req.pk %}" class="btn btn-danger">Cancel Request</a>
+                                </div>
+                            {% endif %}
+                        </div>
+                    {% elif req.status == 'resolved' %}
+                        <span class="text-success fw-bold">Successfully Resolved! Reward Paid to {{ req.accepted_by.username }}.</span>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+
+        <hr class="my-5">
+
+        <div class="row">
+            <div class="col-md-10 mx-auto">
+                <h3>Discussion</h3>
+                
+                {% if user.is_authenticated %}
+                <div class="card mb-4 shadow-sm">
+                    <div class="card-body">
+                        <form method="post">
+                            {% csrf_token %}
+                            <div class="mb-3">
+                                {{ form.content }}
+                            </div>
+                            {% if req.status == 'in_progress' and user == req.user or user == req.accepted_by %}
+                                {% if req.status == 'in_progress' %}
+                                <div class="form-check mb-2">
+                                    {{ form.is_private }}
+                                    <label class="form-check-label" for="{{ form.is_private.id_for_label }}">
+                                        Private (only visible to requester and helper)
+                                    </label>
+                                </div>
+                                {% endif %}
+                            {% endif %}
+                            <button type="submit" class="btn btn-secondary btn-sm mt-2">Post Comment</button>
+                        </form>
+                    </div>
+                </div>
+                {% endif %}
+
+                {% for comment in comments %}
+                <div class="card mb-3 border-0 {% if comment.is_private %}bg-light border-start border-warning border-4{% else %}bg-light{% endif %}">
+                    <div class="card-body py-2">
+                        <div class="d-flex justify-content-between">
+                            <strong>{{ comment.user.username }} 
+                                {% if comment.is_private %}
+                                <span class="badge bg-warning text-dark ms-2 small" style="font-size: 0.7rem;">Private</span>
+                                {% endif %}
+                            </strong>
+                            <small class="text-muted">{{ comment.created_at|timesince }} ago</small>
+                        </div>
+                        <p class="mb-0">{{ comment.content }}</p>
+                    </div>
+                </div>
+                {% empty %}
+                <p class="text-muted">No comments yet. Start the conversation!</p>
+                {% endfor %}
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

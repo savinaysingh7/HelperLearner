@@ -1,0 +1,14 @@
+{% extends 'base.html' %}
+{% block content %}
+<div class="card shadow-sm mx-auto mt-5" style="max-width: 500px;">
+    <div class="card-body text-center">
+        <h4 class="mb-3">Resolve Request?</h4>
+        <p class="text-muted">Are you sure you want to mark <strong>{{ req.title }}</strong> as resolved? This will transfer {{ req.kp_bounty }} KP to <strong>{{ req.accepted_by.username }}</strong>.</p>
+        <form method="post">
+            {% csrf_token %}
+            <button type="submit" class="btn btn-success me-2">Yes, Resolve It</button>
+            <a href="{% url 'request_detail' req.pk %}" class="btn btn-secondary">Go Back</a>
+        </form>
+    </div>
+</div>
+{% endblock %}
