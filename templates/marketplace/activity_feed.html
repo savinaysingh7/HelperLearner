@@ -10,8 +10,8 @@
                 <h1 class="h3 mb-3">My Activity Feed</h1>
 
                 {% for item in feed_items %}
-                    <article class="border rounded-3 p-3 mb-3 d-flex gap-3">
-                        <div class="fs-4 text-primary"><i class="bi {{ item.icon }}"></i></div>
+                    <article class="feed-item border rounded-3 p-3 mb-3 d-flex gap-3">
+                        <div class="feed-icon fs-4 text-primary"><i class="bi {{ item.icon }}"></i></div>
                         <div class="flex-grow-1">
                             <p class="mb-1">{{ item.description }}</p>
                             <div class="small text-muted d-flex flex-wrap gap-2 align-items-center">
@@ -63,7 +63,7 @@
             <div class="card-body">
                 <h2 class="h5 mb-3">Suggested Requests</h2>
                 {% for req in suggested_requests %}
-                    <article class="border rounded-3 p-3 mb-3">
+                    <article class="request-card border rounded-3 p-3 mb-3">
                         <a href="{% url 'request_detail' req.pk %}" class="fw-semibold text-decoration-none d-block mb-1">{{ req.title }}</a>
                         <div class="small text-muted mb-2">Posted by {{ req.user.username }}</div>
                         <div class="d-flex justify-content-between align-items-center">

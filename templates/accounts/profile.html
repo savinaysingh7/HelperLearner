@@ -22,6 +22,9 @@
                     {% else %}
                         <div class="small text-muted">No ratings received yet</div>
                     {% endif %}
+                    <div class="small mt-1">
+                        <span class="badge text-bg-primary">Trust {{ profile_user.trust_score|floatformat:1 }}/100</span>
+                    </div>
                 </div>
 
                 <p class="small text-start mt-3 mb-2"><strong>Bio</strong><br>{{ profile_user.bio|default:'No bio added yet.' }}</p>

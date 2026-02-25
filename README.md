@@ -11,6 +11,8 @@ HelperLearner is a Django 6 knowledge marketplace where users post help requests
 - Tag-based discovery, skill/tag browsing, and filtered request browsing.
 - Unified full-text search across requests/users/skills with highlighting.
 - Personalized user activity feed and KP claim/transfer actions.
+- Saved searches with notification automation for new matching requests.
+- Trust score metrics surfaced on profiles, leaderboard, and user API.
 - DRF read-only API with pagination, filtering, and grouped search.
 - Custom Django admin dashboards/actions for all models.
 
@@ -68,9 +70,16 @@ python manage.py expire_requests
 
 This command now also sends expiry notification emails to request posters.
 
+## Saved Search Notification Command
+Notify users about newly created open requests that match active saved searches:
+```bash
+python manage.py notify_saved_searches
+```
+
 ## Web Endpoints
 - `GET /search/?q=` unified search page for requests/users/skills
 - `GET /feed/` personalized activity feed (login required)
+- `GET,POST /saved-searches/` create/manage saved request filters
 - `GET,POST /kp/claim-daily/` daily +10 KP claim (24-hour cooldown)
 - `GET,POST /kp/transfer/` confirmed KP transfer flow
 
@@ -80,7 +89,7 @@ All endpoints are paginated (`page_size=10`).
 - `GET /api/requests/` (filters: `status`, `skill`)
 - `GET /api/requests/<id>/`
 - `GET /api/requests/<id>/comments/` (public comments only)
-- `GET /api/users/` (username, avg_rating, knowledge_points, skills)
+- `GET /api/users/` (username, avg_rating, trust_score, knowledge_points, skills)
 - `GET /api/skills/` (skill + request_count)
 - `GET /api/search/?q=` (grouped `requests`, `users`, `skills`)
 

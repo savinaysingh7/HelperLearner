@@ -1,6 +1,7 @@
-﻿from datetime import timedelta
+from datetime import timedelta
 
 from django.conf import settings
+from django.core.exceptions import ValidationError
 from django.core.validators import MinValueValidator
 from django.db import models
 from django.utils import timezone
@@ -66,7 +67,7 @@ class HelpRequest(models.Model):
         on_delete=models.SET_NULL,
         null=True,
         blank=True,
-        related_name='accepted_tasks'
+        related_name='accepted_tasks',
     )
 
     def save(self, *args, **kwargs):
@@ -129,4 +130,44 @@ class Rating(models.Model):
         indexes = [
             models.Index(fields=['given_to']),
             models.Index(fields=['created_at']),
+        ]
+
+
+class SavedSearch(models.Model):
+    user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='saved_searches')
+    query = models.CharField(max_length=120, blank=True)
+    skill = models.ForeignKey(Skill, on_delete=models.SET_NULL, null=True, blank=True, related_name='saved_searches')
+    tag = models.ForeignKey(Tag, on_delete=models.SET_NULL, null=True, blank=True, related_name='saved_searches')
+    is_active = models.BooleanField(default=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    last_notified_at = models.DateTimeField(null=True, blank=True)
+
+    def clean(self):
+        """Require at least one filter criterion for saved searches."""
+        has_query = bool((self.query or '').strip())
+        if not has_query and not self.skill_id and not self.tag_id:
+            raise ValidationError('Provide at least one filter (query, skill, or tag).')
+
+    def save(self, *args, **kwargs):
+        """Normalize query text for stable deduplication and filtering."""
+        self.query = (self.query or '').strip()
+        super().save(*args, **kwargs)
+
+    def __str__(self):
+        parts = []
+        if self.query:
+            parts.append(f"q='{self.query}'")
+        if self.skill:
+            parts.append(f'skill={self.skill.name}')
+        if self.tag:
+            parts.append(f'tag={self.tag.name}')
+        criteria = ', '.join(parts) if parts else 'no filters'
+        return f'{self.user.username}: {criteria}'
+
+    class Meta:
+        ordering = ['-created_at']
+        indexes = [
+            models.Index(fields=['user', 'is_active']),
+            models.Index(fields=['created_at']),
+            models.Index(fields=['last_notified_at']),
         ]

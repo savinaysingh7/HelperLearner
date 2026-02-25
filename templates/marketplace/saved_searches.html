@@ -1,0 +1,102 @@
+{% extends 'base.html' %}
+
+{% block title %}Saved Searches | HelperLearner{% endblock %}
+
+{% block content %}
+<div class="row g-4">
+    <section class="col-12 col-lg-4">
+        <div class="card form-shell h-100">
+            <div class="card-body">
+                <h1 class="h5 mb-3">Create Saved Search</h1>
+                <p class="text-muted small">Get notified when new open requests match these filters.</p>
+
+                <form method="post" novalidate>
+                    {% csrf_token %}
+                    <div class="mb-3">
+                        <label for="{{ form.query.id_for_label }}" class="form-label">Keyword</label>
+                        {{ form.query }}
+                    </div>
+                    <div class="mb-3">
+                        <label for="{{ form.skill.id_for_label }}" class="form-label">Skill</label>
+                        {{ form.skill }}
+                    </div>
+                    <div class="mb-3">
+                        <label for="{{ form.tag.id_for_label }}" class="form-label">Tag</label>
+                        {{ form.tag }}
+                    </div>
+                    {% if form.non_field_errors %}
+                        <div class="alert alert-danger py-2">
+                            {% for error in form.non_field_errors %}
+                                <div>{{ error }}</div>
+                            {% endfor %}
+                        </div>
+                    {% endif %}
+                    <button type="submit" class="btn btn-primary w-100">Save Search</button>
+                </form>
+            </div>
+        </div>
+    </section>
+
+    <section class="col-12 col-lg-8">
+        <div class="card">
+            <div class="card-body">
+                <h2 class="h5 mb-3">My Saved Searches</h2>
+                <div class="row g-3">
+                    {% for search in searches %}
+                        <div class="col-12">
+                            <article class="saved-search-item border rounded-3 p-3">
+                                <div class="d-flex flex-column flex-md-row justify-content-between align-items-md-center gap-2">
+                                    <div>
+                                        <div class="d-flex flex-wrap gap-2 mb-2">
+                                            {% if search.query %}
+                                                <span class="badge text-bg-light border">Query: {{ search.query }}</span>
+                                            {% endif %}
+                                            {% if search.skill %}
+                                                <span class="badge text-bg-light border">Skill: {{ search.skill.name }}</span>
+                                            {% endif %}
+                                            {% if search.tag %}
+                                                <span class="badge text-bg-light border">Tag: #{{ search.tag.name }}</span>
+                                            {% endif %}
+                                            <span class="badge {% if search.is_active %}text-bg-success{% else %}text-bg-secondary{% endif %}">
+                                                {% if search.is_active %}Active{% else %}Paused{% endif %}
+                                            </span>
+                                        </div>
+                                        <div class="small text-muted">
+                                            Created {{ search.created_at|timesince }} ago
+                                            {% if search.last_notified_at %}
+                                                | Last alert {{ search.last_notified_at|timesince }} ago
+                                            {% endif %}
+                                        </div>
+                                    </div>
+
+                                    <div class="d-flex flex-wrap gap-2">
+                                        <a href="{{ search.browse_url }}" class="btn btn-sm btn-outline-primary">Browse Matches</a>
+                                        <form method="post" action="{% url 'toggle_saved_search' search.pk %}" class="m-0">
+                                            {% csrf_token %}
+                                            <button type="submit" class="btn btn-sm btn-outline-secondary">
+                                                {% if search.is_active %}Pause{% else %}Activate{% endif %}
+                                            </button>
+                                        </form>
+                                        <form method="post" action="{% url 'delete_saved_search' search.pk %}" class="m-0">
+                                            {% csrf_token %}
+                                            <button type="submit" class="btn btn-sm btn-outline-danger">Delete</button>
+                                        </form>
+                                    </div>
+                                </div>
+                            </article>
+                        </div>
+                    {% empty %}
+                        <div class="col-12">
+                            <div class="empty-state text-center">
+                                <div class="icon"><i class="bi bi-bookmark"></i></div>
+                                <h3 class="h6 mt-2">No saved searches yet</h3>
+                                <p class="text-muted mb-0">Save your favorite filters and get notified when matching requests appear.</p>
+                            </div>
+                        </div>
+                    {% endfor %}
+                </div>
+            </div>
+        </div>
+    </section>
+</div>
+{% endblock %}

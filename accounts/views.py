@@ -14,14 +14,12 @@ from marketplace.models import HelpRequest
 
 from .forms import DeveloperSignUpForm, KPTransferLookupForm, UserUpdateForm
 from .models import CustomUser
+from .query_utils import annotate_user_metrics
 
 
 def _profile_queryset():
     """Return users annotated with rating aggregates and prefetched skills."""
-    return CustomUser.objects.prefetch_related('skills').annotate(
-        avg_rating=Avg('ratings_received__score'),
-        ratings_count=Count('ratings_received'),
-    )
+    return annotate_user_metrics(CustomUser.objects.prefetch_related('skills'))
 
 
 def _month_start(reference, months_ago):

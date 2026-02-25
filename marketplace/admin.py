@@ -3,7 +3,7 @@ from django.db import transaction
 
 from accounts.models import CustomUser
 
-from .models import Comment, HelpRequest, Rating, Skill, Tag
+from .models import Comment, HelpRequest, Rating, SavedSearch, Skill, Tag
 
 
 @admin.register(Skill)
@@ -72,3 +72,12 @@ class RatingAdmin(admin.ModelAdmin):
     def request_title(self, obj):
         """Display request title in rating rows."""
         return obj.request.title
+
+
+@admin.register(SavedSearch)
+class SavedSearchAdmin(admin.ModelAdmin):
+    """Admin listing for saved search filters and notification status."""
+
+    list_display = ('user', 'query', 'skill', 'tag', 'is_active', 'last_notified_at', 'created_at')
+    list_filter = ('is_active', 'skill', 'tag')
+    search_fields = ('user__username', 'query')
