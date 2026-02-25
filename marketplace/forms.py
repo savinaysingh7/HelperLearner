@@ -13,6 +13,12 @@ class HelpRequestForm(forms.ModelForm):
             'kp_bounty': forms.NumberInput(attrs={'class': 'form-control'}),
         }
 
+    def clean_kp_bounty(self):
+        kp = self.cleaned_data.get('kp_bounty')
+        if kp is None or kp < 1:
+            raise forms.ValidationError('The bounty must be at least 1 KP.')
+        return kp
+
 
 class CommentForm(forms.ModelForm):
     class Meta:

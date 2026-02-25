@@ -87,7 +87,7 @@
                 {% endif %}
 
                 {% for comment in comments %}
-                <div class="card mb-3 border-0 {% if comment.is_private %}bg-light border-start border-warning border-4{% else %}bg-light{% endif %}">
+                <div class="card mb-3 border-0 bg-light {% if comment.is_private %}border-start border-warning border-4{% endif %}">
                     <div class="card-body py-2">
                         <div class="d-flex justify-content-between">
                             <strong>{{ comment.user.username }} 

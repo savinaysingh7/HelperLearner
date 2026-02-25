@@ -8,8 +8,17 @@ from .models import HelpRequest, Comment, Skill
 from .forms import HelpRequestForm, CommentForm, SearchForm
 from accounts.models import CustomUser
 
+# API imports moved to top
+from rest_framework import viewsets
+from .serializers import HelpRequestSerializer
+
+# Rate limiting
+from ratelimit.decorators import ratelimit
+from django.views.decorators.csrf import csrf_protect
+
 
 def home(request):
+    """Render the homepage with live stats and recent open requests."""
     total_users = CustomUser.objects.count()
     open_requests = HelpRequest.objects.filter(status='open').count()
     recent_requests = HelpRequest.objects.filter(status='open').order_by('-created_at')[:3]
@@ -23,6 +32,7 @@ def home(request):
 
 
 def request_list(request):
+    """List open and in-progress help requests with filtering and pagination."""
     all_requests = HelpRequest.objects.filter(status__in=['open', 'in_progress']).order_by('-created_at')
     form = SearchForm(request.GET)
 
@@ -50,7 +60,13 @@ def request_list(request):
 
 
 @login_required
+@csrf_protect
+@ratelimit(key='ip', rate='10/m', block=True)
 def create_request(request):
+    """Create a help request; deduct bounty from user's points (escrow).
+
+    Rate-limited to prevent abuse.
+    """
     if request.method == 'POST':
         form = HelpRequestForm(request.POST)
         if form.is_valid():
@@ -78,7 +94,12 @@ def create_request(request):
     return render(request, 'marketplace/create_request.html', {'form': form})
 
 
+@csrf_protect
 def request_detail(request, pk):
+    """Show a single help request and its discussion/comments.
+
+    Private comments are only visible to the requester and assigned helper.
+    """
     help_req = get_object_or_404(HelpRequest, pk=pk)
     
     # Filter comments: show all public ones, but private ones only to the requester and the helper
@@ -123,7 +144,13 @@ def request_detail(request, pk):
 
 
 @login_required
+@csrf_protect
+@ratelimit(key='ip', rate='20/m', block=True)
 def claim_request(request, pk):
+    """Allow an authenticated user to claim an open help request.
+
+    Rate-limited to prevent mass claiming.
+    """
     help_req = get_object_or_404(HelpRequest, pk=pk)
     if help_req.user == request.user:
         messages.warning(request, "You cannot claim your own request.")
@@ -142,7 +169,9 @@ def claim_request(request, pk):
 
 
 @login_required
+@csrf_protect
 def resolve_request(request, pk):
+    """Mark an in-progress request as resolved and transfer escrowed KP to helper."""
     help_req = get_object_or_404(HelpRequest, pk=pk)
 
     if help_req.user != request.user:
@@ -179,7 +208,9 @@ def resolve_request(request, pk):
     return redirect('request_detail', pk=pk)
 
 @login_required
+@csrf_protect
 def cancel_request(request, pk):
+    """Cancel a user's request and refund escrowed KP to the poster."""
     help_req = get_object_or_404(HelpRequest, pk=pk)
 
     if help_req.user != request.user:
@@ -193,7 +224,7 @@ def cancel_request(request, pk):
     if request.method == 'GET':
         return render(request, 'marketplace/confirm_cancel.html', {'req': help_req})
 
-    # Only reaches here on POST
+    # POST: refund and cancel
     with transaction.atomic():
         help_req = get_object_or_404(
             HelpRequest.objects.select_for_update(), pk=pk
@@ -201,8 +232,6 @@ def cancel_request(request, pk):
         # Refund the points to the user
         help_req.user.knowledge_points += help_req.kp_bounty
         help_req.user.save()
-
-        # We will change the status to 'canceled'. This requires a model change.
         help_req.status = 'canceled'
         help_req.save()
 
@@ -211,13 +240,9 @@ def cancel_request(request, pk):
     return redirect('request_detail', pk=pk)
 
 # --- API Views ---
-from rest_framework import viewsets
-from .serializers import HelpRequestSerializer
 
 class HelpRequestViewSet(viewsets.ReadOnlyModelViewSet):
-    """
-    A read-only API endpoint for listing and retrieving HelpRequests.
-    """
+    """A read-only API endpoint for listing and retrieving HelpRequests."""
     queryset = HelpRequest.objects.all().order_by('-created_at')
     serializer_class = HelpRequestSerializer
 

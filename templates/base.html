@@ -5,6 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>{% block title %}HelperLearner | Developer Help{% endblock %}</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.5/font/bootstrap-icons.css">
     <style>
         body { background-color: #f8f9fa; }
         .navbar { background-color: #2c3e50; }
@@ -35,9 +36,9 @@
     <div class="container">
         {% if messages %}
             {% for message in messages %}
-                <div class="alert alert-{{ message.tags }} alert-dismissible fade show">
+                <div class="alert alert-{{ message.tags }} alert-dismissible fade show" role="alert">
                     {{ message }}
-                    <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+                    <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
                 </div>
             {% endfor %}
         {% endif %}
@@ -46,5 +47,31 @@
     </div>
 
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+    // Auto-dismiss flash messages after 4s
+    document.addEventListener('DOMContentLoaded', function(){
+        setTimeout(function(){
+            document.querySelectorAll('.alert').forEach(function(a){
+                var bsAlert = bootstrap.Alert.getOrCreateInstance(a);
+                bsAlert.close();
+            });
+        }, 4000);
+
+        // Prevent double submits: disable submit buttons and show spinner
+        document.querySelectorAll('form').forEach(function(form){
+            form.addEventListener('submit', function(e){
+                var submit = form.querySelector('[type=submit]');
+                if(submit){
+                    submit.disabled = true;
+                    var spinner = document.createElement('span');
+                    spinner.className = 'spinner-border spinner-border-sm ms-2';
+                    spinner.setAttribute('role','status');
+                    spinner.setAttribute('aria-hidden','true');
+                    submit.appendChild(spinner);
+                }
+            });
+        });
+    });
+    </script>
 </body>
 </html>

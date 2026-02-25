@@ -39,7 +39,8 @@
             </div>
             {% empty %}
             <div class="text-center py-5">
-                <p class="lead text-muted">No requests found matching your search.</p>
+                <i class="bi bi-inbox-fill display-1 text-muted"></i>
+                <p class="lead text-muted mt-3">No requests found matching your search.</p>
                 <a href="{% url 'request_list' %}" class="btn btn-outline-secondary">Back to all requests</a>
             </div>
             {% endfor %}
