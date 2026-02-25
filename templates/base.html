@@ -27,9 +27,31 @@
                     <li class="nav-item">
                         <a class="nav-link" href="{% url 'create_request' %}">Post Request</a>
                     </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="{% url 'skill_browse' %}">Skills</a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="{% url 'tag_browse' %}">Tags</a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="{% url 'leaderboard' %}">Leaderboard</a>
+                    </li>
+                    {% if user.is_authenticated %}
+                        <li class="nav-item">
+                            <a class="nav-link" href="{% url 'dashboard' %}">Dashboard</a>
+                        </li>
+                    {% endif %}
                 </ul>
                 <div class="d-flex flex-column flex-lg-row align-items-lg-center gap-2">
                     {% if user.is_authenticated %}
+                        <a href="{% url 'notification_list' %}" class="btn btn-outline-light btn-sm position-relative">
+                            <i class="bi bi-bell"></i>
+                            {% if unread_notifications_count %}
+                                <span class="position-absolute top-0 start-100 translate-middle badge rounded-pill bg-danger">
+                                    {{ unread_notifications_count }}
+                                </span>
+                            {% endif %}
+                        </a>
                         <span class="balance-pill"><i class="bi bi-coin me-1"></i>{{ user.knowledge_points }} KP</span>
                         <a href="{% url 'profile' %}" class="btn btn-outline-light btn-sm">Profile ({{ user.username }})</a>
                         <form action="{% url 'logout' %}" method="post" class="m-0">

@@ -7,10 +7,10 @@ class CustomUserAdmin(UserAdmin):
     model = CustomUser
     list_display = ['username', 'email', 'knowledge_points', 'is_staff']
     fieldsets = UserAdmin.fieldsets + (
-        (None, {'fields': ('bio', 'knowledge_points')}),
+        (None, {'fields': ('bio', 'knowledge_points', 'skills')}),
     )
     add_fieldsets = UserAdmin.add_fieldsets + (
-        (None, {'fields': ('bio', 'knowledge_points')}),
+        (None, {'fields': ('bio', 'knowledge_points', 'skills')}),
     )
 
 

@@ -1,4 +1,5 @@
 ﻿{% extends 'base.html' %}
+{% load rating_tags discovery_tags %}
 
 {% block title %}{{ req.title }} | HelperLearner{% endblock %}
 
@@ -16,15 +17,26 @@
             <div class="card-body p-4">
                 <div class="d-flex flex-column flex-md-row justify-content-between gap-3 align-items-md-start">
                     <h1 class="h3 mb-0">{{ req.title }}</h1>
-                    <span class="badge {% if req.status == 'open' %}text-bg-success{% elif req.status == 'resolved' or req.status == 'canceled' %}text-bg-secondary{% else %}text-bg-warning{% endif %}">{{ req.get_status_display }}</span>
+                    <div class="d-flex flex-wrap gap-2">
+                        <span class="badge {% if req.status == 'open' %}text-bg-success{% elif req.status == 'resolved' or req.status == 'canceled' %}text-bg-secondary{% else %}text-bg-warning{% endif %}">{{ req.get_status_display }}</span>
+                        <span class="badge {{ req.expires_at|expiry_badge_class }}">{{ req.expires_at|expires_in_days }}</span>
+                    </div>
                 </div>
 
-                <p class="text-muted mt-2 mb-3">
-                    Posted by <strong>{{ req.user.username }}</strong>
+                <p class="text-muted mt-2 mb-2">
+                    Posted by <strong><a class="text-decoration-none" href="{% url 'public_profile' req.user.username %}">{{ req.user.username }}</a></strong>
                     {% if req.skill_needed %}
                         in <span class="badge text-bg-light border">{{ req.skill_needed }}</span>
                     {% endif %}
                 </p>
+
+                <div class="d-flex flex-wrap gap-2 mb-3">
+                    {% for tag in req.tags.all %}
+                        <a href="{% url 'request_list' %}?tag={{ tag.slug }}" class="badge rounded-pill text-bg-light border text-decoration-none">#{{ tag.name }}</a>
+                    {% empty %}
+                        <span class="text-muted small">No tags added.</span>
+                    {% endfor %}
+                </div>
 
                 <h2 class="h5">Description</h2>
                 <p class="mb-4">{{ req.description }}</p>
@@ -43,7 +55,9 @@
                                     <button type="submit" class="btn btn-primary">Accept Request</button>
                                 </form>
                             {% elif user == req.user %}
+                                <a href="{% url 'edit_request' req.pk %}" class="btn btn-outline-primary">Edit</a>
                                 <a href="{% url 'cancel_request' req.pk %}" class="btn btn-outline-danger">Cancel Request</a>
+                                <a href="{% url 'delete_request' req.pk %}" class="btn btn-danger">Delete</a>
                             {% endif %}
                         {% elif req.status == 'in_progress' %}
                             <span class="fw-semibold text-warning-emphasis align-self-center">Being solved by {{ req.accepted_by.username }}</span>
@@ -52,14 +66,49 @@
                                 <a href="{% url 'cancel_request' req.pk %}" class="btn btn-outline-danger">Cancel</a>
                             {% endif %}
                         {% elif req.status == 'resolved' %}
-                            <span class="fw-semibold text-success align-self-center">Resolved and paid out to {{ req.accepted_by.username }}.</span>
+                            <span class="fw-semibold text-success align-self-center">Resolved and paid out to <a class="text-decoration-none" href="{% url 'public_profile' req.accepted_by.username %}">{{ req.accepted_by.username }}</a>.</span>
                         {% elif req.status == 'canceled' %}
                             <span class="fw-semibold text-muted align-self-center">This request was canceled and escrow refunded.</span>
+                            {% if can_delete %}
+                                <a href="{% url 'delete_request' req.pk %}" class="btn btn-danger">Delete</a>
+                            {% endif %}
                         {% endif %}
                     </div>
                 </section>
             </div>
         </article>
+
+        {% if req.status == 'resolved' %}
+            <section class="row justify-content-center mb-4">
+                <div class="col-12 col-lg-10">
+                    <div class="card">
+                        <div class="card-body">
+                            <h2 class="h5 mb-3">Helper Rating</h2>
+                            {% if existing_rating %}
+                                <p class="mb-1">
+                                    You rated <strong>{{ existing_rating.given_to.username }}</strong>:
+                                    <span class="fw-semibold">{{ existing_rating.score|star_display }}</span>
+                                    ({{ existing_rating.score }}/5)
+                                </p>
+                            {% elif can_rate %}
+                                <form action="{% url 'rate_request' req.pk %}" method="post" class="row g-2 align-items-end">
+                                    {% csrf_token %}
+                                    <div class="col-12 col-sm-5">
+                                        <label for="{{ rating_form.score.id_for_label }}" class="form-label">Rate your helper</label>
+                                        {{ rating_form.score }}
+                                    </div>
+                                    <div class="col-12 col-sm-auto">
+                                        <button type="submit" class="btn btn-warning">Submit Rating</button>
+                                    </div>
+                                </form>
+                            {% else %}
+                                <p class="text-muted mb-0">Rating is unavailable for this request.</p>
+                            {% endif %}
+                        </div>
+                    </div>
+                </div>
+            </section>
+        {% endif %}
 
         <section class="row justify-content-center">
             <div class="col-12 col-lg-10">
@@ -98,7 +147,7 @@
                         <div class="card-body py-3">
                             <div class="d-flex justify-content-between align-items-center mb-1">
                                 <strong>
-                                    {{ comment.user.username }}
+                                    <a class="text-decoration-none" href="{% url 'public_profile' comment.user.username %}">{{ comment.user.username }}</a>
                                     {% if comment.is_private %}
                                         <span class="badge private-comment-badge ms-2">Private</span>
                                     {% endif %}

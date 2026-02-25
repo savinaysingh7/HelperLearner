@@ -5,5 +5,6 @@ urlpatterns = [
     path('admin/', admin.site.urls),
     path('', include('marketplace.urls')),
     path('accounts/', include('accounts.urls')),
+    path('notifications/', include('notifications.urls')),
     path('accounts/', include('django.contrib.auth.urls')),
 ]

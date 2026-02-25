@@ -1,13 +1,13 @@
 ﻿{% extends 'base.html' %}
 
-{% block title %}Post Request | HelperLearner{% endblock %}
+{% block title %}{% if is_edit %}Edit Request{% else %}Post Request{% endif %} | HelperLearner{% endblock %}
 
 {% block content %}
 <div class="row justify-content-center">
     <div class="col-12 col-lg-8 col-xl-7">
         <div class="card form-shell">
             <div class="card-body p-4 p-md-5">
-                <h1 class="h3 mb-3">Post a Help Request</h1>
+                <h1 class="h3 mb-3">{% if is_edit %}Edit Help Request{% else %}Post a Help Request{% endif %}</h1>
                 <p class="text-muted">Create a clear request so other developers can pick it up quickly.</p>
 
                 <form method="post" novalidate>
@@ -25,6 +25,17 @@
                         <label for="{{ form.description.id_for_label }}" class="form-label">Description</label>
                         {{ form.description }}
                         {% for error in form.description.errors %}
+                            <div class="text-danger small">{{ error }}</div>
+                        {% endfor %}
+                    </div>
+
+                    <div class="mb-3">
+                        <label for="{{ form.tags_input.id_for_label }}" class="form-label">Tags</label>
+                        {{ form.tags_input }}
+                        {% if form.tags_input.help_text %}
+                            <div class="form-text">{{ form.tags_input.help_text }}</div>
+                        {% endif %}
+                        {% for error in form.tags_input.errors %}
                             <div class="text-danger small">{{ error }}</div>
                         {% endfor %}
                     </div>
@@ -54,8 +65,11 @@
                         </div>
                     {% endif %}
 
-                    <div class="d-grid mt-4">
-                        <button type="submit" class="btn btn-primary btn-lg">Submit Request</button>
+                    <div class="d-grid mt-4 gap-2">
+                        <button type="submit" class="btn btn-primary btn-lg">{% if is_edit %}Save Changes{% else %}Submit Request{% endif %}</button>
+                        {% if is_edit and req %}
+                            <a href="{% url 'request_detail' req.pk %}" class="btn btn-outline-secondary">Cancel</a>
+                        {% endif %}
                     </div>
                 </form>
             </div>

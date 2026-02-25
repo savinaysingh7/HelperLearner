@@ -1,0 +1,29 @@
+﻿{% extends 'base.html' %}
+
+{% block title %}Delete Request | HelperLearner{% endblock %}
+
+{% block content %}
+<div class="row justify-content-center">
+    <div class="col-12 col-md-8 col-lg-6">
+        <div class="card text-center">
+            <div class="card-body p-4">
+                <div class="display-6 text-danger mb-3"><i class="bi bi-trash"></i></div>
+                <h1 class="h4 mb-3">Delete this request?</h1>
+                <p class="text-muted">
+                    Deleting <strong>{{ req.title }}</strong>
+                    {% if req.status == 'open' %}
+                        will refund <strong>{{ req.kp_bounty }} KP</strong> to your balance.
+                    {% else %}
+                        is permanent and cannot be undone.
+                    {% endif %}
+                </p>
+                <form method="post" class="d-flex flex-column flex-sm-row gap-2 justify-content-center mt-4">
+                    {% csrf_token %}
+                    <button type="submit" class="btn btn-danger">Yes, delete request</button>
+                    <a href="{% url 'request_detail' req.pk %}" class="btn btn-outline-secondary">Go back</a>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

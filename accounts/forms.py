@@ -1,5 +1,8 @@
 from django import forms
 from django.contrib.auth.forms import UserCreationForm
+
+from marketplace.models import Skill
+
 from .models import CustomUser
 
 
@@ -24,9 +27,15 @@ class DeveloperSignUpForm(UserCreationForm):
 class UserUpdateForm(forms.ModelForm):
     """Form for editing profile details."""
 
+    skills = forms.ModelMultipleChoiceField(
+        queryset=Skill.objects.all(),
+        required=False,
+        widget=forms.CheckboxSelectMultiple(attrs={'class': 'form-check-input'}),
+    )
+
     class Meta:
         model = CustomUser
-        fields = ['email', 'bio']
+        fields = ['email', 'bio', 'skills']
         widgets = {
             'email': forms.EmailInput(attrs={'class': 'form-control'}),
             'bio': forms.Textarea(attrs={'class': 'form-control', 'rows': 4}),

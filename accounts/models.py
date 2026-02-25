@@ -5,6 +5,7 @@ from django.db import models
 class CustomUser(AbstractUser):
     bio = models.TextField(max_length=500, blank=True)
     knowledge_points = models.IntegerField(default=100)
+    skills = models.ManyToManyField('marketplace.Skill', blank=True, related_name='users')
 
     def __str__(self):
         return self.username

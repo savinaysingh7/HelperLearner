@@ -1,0 +1,89 @@
+﻿{% extends 'base.html' %}
+{% load rating_tags %}
+
+{% block title %}Dashboard | HelperLearner{% endblock %}
+
+{% block content %}
+<div class="row g-4">
+    <div class="col-12">
+        <h1 class="h3 mb-0">My Dashboard</h1>
+        <p class="text-muted">Your KP and activity insights for the last 6 months.</p>
+    </div>
+
+    <div class="col-12 col-md-6 col-xl-3">
+        <div class="card h-100">
+            <div class="card-body">
+                <div class="small text-muted">Total KP Earned</div>
+                <div class="h2 text-success mb-0">{{ total_kp_earned }}</div>
+            </div>
+        </div>
+    </div>
+    <div class="col-12 col-md-6 col-xl-3">
+        <div class="card h-100">
+            <div class="card-body">
+                <div class="small text-muted">Total KP Spent</div>
+                <div class="h2 text-danger mb-0">{{ total_kp_spent }}</div>
+            </div>
+        </div>
+    </div>
+    <div class="col-12 col-md-6 col-xl-3">
+        <div class="card h-100">
+            <div class="card-body">
+                <div class="small text-muted">Requests Posted / Helped</div>
+                <div class="h2 mb-0">{{ requests_posted_count }} / {{ requests_helped_count }}</div>
+            </div>
+        </div>
+    </div>
+    <div class="col-12 col-md-6 col-xl-3">
+        <div class="card h-100">
+            <div class="card-body">
+                <div class="small text-muted">Success Rate</div>
+                <div class="h2 mb-0">{{ success_rate }}%</div>
+                <div class="small text-muted mt-1">
+                    {% if average_rating_received %}
+                        {{ average_rating_received|star_display }} ({{ average_rating_received|floatformat:1 }})
+                    {% else %}
+                        No ratings yet
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-12">
+        <div class="card">
+            <div class="card-body">
+                <h2 class="h5 mb-3">Activity by Month (Last 6 Months)</h2>
+                <div class="table-responsive">
+                    <table class="table align-middle mb-0">
+                        <thead>
+                            <tr>
+                                <th scope="col">Month</th>
+                                <th scope="col">Posted</th>
+                                <th scope="col">Helped</th>
+                                <th scope="col">Total</th>
+                                <th scope="col" style="min-width: 260px;">Activity Bar</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for item in monthly_activity %}
+                                <tr>
+                                    <td>{{ item.label }}</td>
+                                    <td>{{ item.posted_count }}</td>
+                                    <td>{{ item.helped_count }}</td>
+                                    <td>{{ item.total_count }}</td>
+                                    <td>
+                                        <div class="progress" role="progressbar" aria-label="Activity for {{ item.label }}" aria-valuenow="{{ item.progress_pct }}" aria-valuemin="0" aria-valuemax="100">
+                                            <div class="progress-bar bg-info" style="width: {{ item.progress_pct }}%;">{{ item.progress_pct|floatformat:0 }}%</div>
+                                        </div>
+                                    </td>
+                                </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

@@ -4,24 +4,50 @@
 
 {% block content %}
 <div class="row justify-content-center">
-    <div class="col-12 col-md-8 col-lg-6">
+    <div class="col-12 col-md-9 col-lg-7">
         <div class="card form-shell">
             <div class="card-body p-4">
                 <h1 class="h4 mb-3">Edit Profile</h1>
                 <form method="post" novalidate>
                     {% csrf_token %}
-                    {% for field in form %}
-                        <div class="mb-3">
-                            <label for="{{ field.id_for_label }}" class="form-label">{{ field.label }}</label>
-                            {{ field }}
-                            {% if field.help_text %}
-                                <div class="form-text">{{ field.help_text }}</div>
-                            {% endif %}
-                            {% for error in field.errors %}
-                                <div class="text-danger small">{{ error }}</div>
+
+                    <div class="mb-3">
+                        <label for="{{ form.email.id_for_label }}" class="form-label">{{ form.email.label }}</label>
+                        {{ form.email }}
+                        {% for error in form.email.errors %}
+                            <div class="text-danger small">{{ error }}</div>
+                        {% endfor %}
+                    </div>
+
+                    <div class="mb-3">
+                        <label for="{{ form.bio.id_for_label }}" class="form-label">{{ form.bio.label }}</label>
+                        {{ form.bio }}
+                        {% for error in form.bio.errors %}
+                            <div class="text-danger small">{{ error }}</div>
+                        {% endfor %}
+                    </div>
+
+                    <div class="mb-3">
+                        <label class="form-label d-block">Skills</label>
+                        <div class="row g-2">
+                            {% for checkbox in form.skills %}
+                                <div class="col-12 col-sm-6">
+                                    <div class="form-check border rounded p-2">
+                                        {{ checkbox.tag }}
+                                        <label class="form-check-label" for="{{ checkbox.id_for_label }}">{{ checkbox.choice_label }}</label>
+                                    </div>
+                                </div>
+                            {% empty %}
+                                <div class="col-12">
+                                    <span class="text-muted small">No skills available yet.</span>
+                                </div>
                             {% endfor %}
                         </div>
-                    {% endfor %}
+                        {% for error in form.skills.errors %}
+                            <div class="text-danger small">{{ error }}</div>
+                        {% endfor %}
+                    </div>
+
                     <div class="d-flex gap-2 flex-column flex-sm-row">
                         <button type="submit" class="btn btn-success">Save Changes</button>
                         <a href="{% url 'profile' %}" class="btn btn-outline-secondary">Cancel</a>

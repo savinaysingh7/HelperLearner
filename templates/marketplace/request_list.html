@@ -1,4 +1,5 @@
 ﻿{% extends 'base.html' %}
+{% load discovery_tags %}
 
 {% block title %}Browse Requests | HelperLearner{% endblock %}
 
@@ -17,9 +18,13 @@
                         <label for="{{ form.skill.id_for_label }}" class="form-label">Skill</label>
                         {{ form.skill }}
                     </div>
+                    <div class="mb-3">
+                        <label for="{{ form.tag.id_for_label }}" class="form-label">Tag</label>
+                        {{ form.tag }}
+                    </div>
                     <div class="d-grid gap-2">
                         <button class="btn btn-primary" type="submit">Search</button>
-                        {% if request.GET.q or request.GET.skill %}
+                        {% if request.GET.q or request.GET.skill or request.GET.tag %}
                             <a href="{% url 'request_list' %}" class="btn btn-outline-secondary">Clear</a>
                         {% endif %}
                     </div>
@@ -33,6 +38,8 @@
             <h1 class="h3 mb-2 mb-md-0">
                 {% if request.GET.q %}
                     Results for "{{ request.GET.q }}"
+                {% elif request.GET.tag %}
+                    Tagged Request Results
                 {% else %}
                     Open Help Requests
                 {% endif %}
@@ -48,9 +55,20 @@
                             <div class="d-flex flex-column flex-md-row gap-3 justify-content-between align-items-md-center">
                                 <div>
                                     <h2 class="h5 mb-1">{{ req.title }}</h2>
-                                    <div class="d-flex flex-wrap gap-2 mb-2">
+                                    <div class="d-flex flex-wrap gap-2 mb-2 align-items-center">
                                         <span class="badge text-bg-light border">{{ req.skill_needed }}</span>
-                                        <span class="badge {% if req.status == 'open' %}text-bg-success{% else %}text-bg-warning{% endif %}">{{ req.get_status_display }}</span>
+                                        <span class="badge {% if req.status == 'open' %}text-bg-success{% elif req.status == 'in_progress' %}text-bg-warning{% else %}text-bg-secondary{% endif %}">{{ req.get_status_display }}</span>
+                                        <span class="badge {{ req.expires_at|expiry_badge_class }}">{{ req.expires_at|expires_in_days }}</span>
+                                    </div>
+                                    {% if req.skill_needed %}
+                                        <p class="small text-muted mb-2">
+                                            <i class="bi bi-people me-1"></i>{{ req.skill_user_count }} registered user{{ req.skill_user_count|pluralize }} with this skill
+                                        </p>
+                                    {% endif %}
+                                    <div class="d-flex flex-wrap gap-2 mb-2">
+                                        {% for tag in req.tags.all %}
+                                            <a href="{% url 'request_list' %}?tag={{ tag.slug }}" class="badge rounded-pill text-bg-light border text-decoration-none">#{{ tag.name }}</a>
+                                        {% endfor %}
                                     </div>
                                     <p class="text-muted small mb-0">{{ req.description|truncatewords:20 }}</p>
                                 </div>
@@ -67,7 +85,7 @@
                     <div class="empty-state text-center">
                         <div class="icon"><i class="bi bi-inbox"></i></div>
                         <h2 class="h5 mt-2">No requests matched your filters</h2>
-                        <p class="text-muted mb-3">Try a different keyword or clear the selected skill.</p>
+                        <p class="text-muted mb-3">Try a different keyword, skill, or tag.</p>
                         <a href="{% url 'request_list' %}" class="btn btn-outline-secondary">Back to all requests</a>
                     </div>
                 </div>
@@ -79,7 +97,7 @@
                 <ul class="pagination justify-content-center flex-wrap gap-1">
                     {% if page_obj.has_previous %}
                         <li class="page-item">
-                            <a class="page-link" href="?page={{ page_obj.previous_page_number }}&q={{ request.GET.q }}&skill={{ request.GET.skill }}">Previous</a>
+                            <a class="page-link" href="?page={{ page_obj.previous_page_number }}&q={{ request.GET.q }}&skill={{ request.GET.skill }}&tag={{ request.GET.tag }}">Previous</a>
                         </li>
                     {% else %}
                         <li class="page-item disabled"><span class="page-link">Previous</span></li>
@@ -91,7 +109,7 @@
 
                     {% if page_obj.has_next %}
                         <li class="page-item">
-                            <a class="page-link" href="?page={{ page_obj.next_page_number }}&q={{ request.GET.q }}&skill={{ request.GET.skill }}">Next</a>
+                            <a class="page-link" href="?page={{ page_obj.next_page_number }}&q={{ request.GET.q }}&skill={{ request.GET.skill }}&tag={{ request.GET.tag }}">Next</a>
                         </li>
                     {% else %}
                         <li class="page-item disabled"><span class="page-link">Next</span></li>

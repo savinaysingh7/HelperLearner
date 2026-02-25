@@ -1,0 +1,55 @@
+﻿{% extends 'base.html' %}
+{% load rating_tags %}
+
+{% block title %}{{ profile_user.username }} | Profile{% endblock %}
+
+{% block content %}
+<div class="row justify-content-center">
+    <div class="col-12 col-lg-8 col-xl-7">
+        <div class="card">
+            <div class="card-body p-4">
+                <div class="d-flex align-items-center gap-3 mb-3">
+                    <div class="bg-primary-subtle text-primary-emphasis rounded-circle d-inline-flex justify-content-center align-items-center" style="width: 72px; height: 72px; font-size: 1.8rem;">
+                        {{ profile_user.username|first|upper }}
+                    </div>
+                    <div>
+                        <h1 class="h3 mb-1">{{ profile_user.username }}</h1>
+                        {% if profile_user.avg_rating %}
+                            <div class="fw-semibold">{{ profile_user.avg_rating|star_display }} <span class="small text-muted">({{ profile_user.avg_rating|floatformat:1 }}/5)</span></div>
+                            <div class="small text-muted">{{ profile_user.ratings_count }} rating{{ profile_user.ratings_count|pluralize }}</div>
+                        {% else %}
+                            <div class="small text-muted">No ratings yet</div>
+                        {% endif %}
+                    </div>
+                </div>
+
+                <p class="mb-3"><strong>Bio:</strong><br>{{ profile_user.bio|default:'No bio added yet.' }}</p>
+
+                <div class="mb-3">
+                    <div class="small fw-semibold mb-2">Skills</div>
+                    {% for skill in profile_user.skills.all %}
+                        <span class="badge text-bg-light border me-1 mb-1">{{ skill.name }}</span>
+                    {% empty %}
+                        <span class="text-muted small">No skills listed yet.</span>
+                    {% endfor %}
+                </div>
+
+                <div class="row g-3">
+                    <div class="col-6">
+                        <div class="p-3 border rounded-3 text-center">
+                            <div class="small text-muted">Requests Posted</div>
+                            <div class="h4 mb-0">{{ posted_count }}</div>
+                        </div>
+                    </div>
+                    <div class="col-6">
+                        <div class="p-3 border rounded-3 text-center">
+                            <div class="small text-muted">Requests Helped</div>
+                            <div class="h4 mb-0">{{ helped_count }}</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

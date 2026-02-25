@@ -1,21 +1,26 @@
-from django.urls import path, include
+﻿from django.urls import include, path
 from rest_framework.routers import DefaultRouter
+
 from . import views
 
-# Create a router and register our viewsets with it.
 router = DefaultRouter()
 router.register(r'requests', views.HelpRequestViewSet, basename='request')
+router.register(r'users', views.UserViewSet, basename='api-user')
+router.register(r'skills', views.SkillViewSet, basename='api-skill')
 
-# The API URLs are now determined automatically by the router.
 urlpatterns = [
     path('', views.home, name='home'),
     path('browse/', views.request_list, name='request_list'),
     path('post/', views.create_request, name='create_request'),
     path('request/<int:pk>/', views.request_detail, name='request_detail'),
+    path('request/<int:pk>/edit/', views.edit_request, name='edit_request'),
+    path('request/<int:pk>/delete/', views.delete_request, name='delete_request'),
+    path('request/<int:pk>/rate/', views.rate_request, name='rate_request'),
     path('request/<int:pk>/claim/', views.claim_request, name='claim_request'),
     path('request/<int:pk>/resolve/', views.resolve_request, name='resolve_request'),
     path('request/<int:pk>/cancel/', views.cancel_request, name='cancel_request'),
-
-    # API Endpoints
+    path('skills/', views.skill_browse, name='skill_browse'),
+    path('tags/', views.tag_browse, name='tag_browse'),
+    path('leaderboard/', views.leaderboard, name='leaderboard'),
     path('api/', include(router.urls)),
 ]
