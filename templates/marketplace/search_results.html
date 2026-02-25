@@ -4,20 +4,17 @@
 {% block title %}Search | HelperLearner{% endblock %}
 
 {% block content %}
-<div class="row g-4">
-    <div class="col-12">
-        <div class="card">
-            <div class="card-body">
-                <h1 class="h3 mb-2">Unified Search</h1>
-                {% if query %}
-                    <p class="text-muted mb-0">Showing results for <strong>"{{ query }}"</strong>.</p>
-                {% else %}
-                    <p class="text-muted mb-0">Enter a keyword in the navbar search to find requests, users, and skills.</p>
-                {% endif %}
-            </div>
-        </div>
-    </div>
+<section class="page-head">
+    <span class="eyebrow"><i class="bi bi-search"></i>Unified Search</span>
+    <h1 class="h3">Find Requests, Users, and Skills</h1>
+    {% if query %}
+        <p class="text-muted mb-0">Showing results for <strong>"{{ query }}"</strong>.</p>
+    {% else %}
+        <p class="text-muted mb-0">Enter a keyword in the navbar search to find requests, users, and skills.</p>
+    {% endif %}
+</section>
 
+<div class="row g-4">
     {% if query and not has_results %}
         <div class="col-12">
             <div class="empty-state text-center">
@@ -34,15 +31,15 @@
                 <div class="card-body">
                     <h2 class="h5 mb-3">Requests ({{ request_count }})</h2>
                     {% for req in request_results %}
-                        <article class="request-card border rounded-3 p-3 mb-3">
+                        <article class="search-result-item">
                             <a class="h6 d-block text-decoration-none mb-1" href="{% url 'request_detail' req.pk %}">{{ req.title|highlight:query }}</a>
                             <p class="text-muted small mb-2">{{ req.description|truncatewords:22|highlight:query }}</p>
                             <div class="d-flex flex-wrap gap-2">
                                 {% if req.skill_needed %}
-                                    <span class="badge text-bg-light border">{{ req.skill_needed.name|highlight:query }}</span>
+                                    <span class="badge badge-soft">{{ req.skill_needed.name|highlight:query }}</span>
                                 {% endif %}
                                 {% for tag in req.tags.all %}
-                                    <a href="{% url 'request_list' %}?tag={{ tag.slug }}" class="badge rounded-pill text-bg-light border text-decoration-none">#{{ tag.name|highlight:query }}</a>
+                                    <a href="{% url 'request_list' %}?tag={{ tag.slug }}" class="badge rounded-pill badge-soft text-decoration-none">#{{ tag.name|highlight:query }}</a>
                                 {% endfor %}
                             </div>
                         </article>
@@ -56,9 +53,9 @@
                 <div class="card-body">
                     <h2 class="h5 mb-3">Users ({{ user_count }})</h2>
                     {% for profile_user in user_results %}
-                        <article class="request-card border rounded-3 p-3 mb-3">
+                        <article class="search-result-item">
                             <a class="h6 d-block text-decoration-none mb-1" href="{% url 'public_profile' profile_user.username %}">{{ profile_user.username|highlight:query }}</a>
-                            <p class="text-muted small mb-2 mb-0">{{ profile_user.bio|default:'No bio added yet.'|truncatewords:18|highlight:query }}</p>
+                            <p class="text-muted small mb-0">{{ profile_user.bio|default:'No bio added yet.'|truncatewords:18|highlight:query }}</p>
                         </article>
                     {% empty %}
                         <p class="text-muted mb-0">No user matches.</p>
@@ -70,9 +67,9 @@
                 <div class="card-body">
                     <h2 class="h5 mb-3">Skills ({{ skill_count }})</h2>
                     {% for skill in skill_results %}
-                        <article class="request-card border rounded-3 p-3 mb-3 d-flex justify-content-between align-items-center">
+                        <article class="search-result-item d-flex justify-content-between align-items-center">
                             <span class="fw-semibold">{{ skill.name|highlight:query }}</span>
-                            <span class="badge text-bg-light border">{{ skill.request_count }} request{{ skill.request_count|pluralize }}</span>
+                            <span class="badge badge-soft">{{ skill.request_count }} request{{ skill.request_count|pluralize }}</span>
                         </article>
                     {% empty %}
                         <p class="text-muted mb-0">No skill matches.</p>

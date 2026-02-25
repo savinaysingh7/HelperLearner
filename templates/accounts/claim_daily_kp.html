@@ -4,11 +4,19 @@
 
 {% block content %}
 <div class="row justify-content-center">
-    <div class="col-12 col-lg-6">
-        <div class="card">
+    <div class="col-12 col-lg-7 col-xl-6">
+        <section class="page-head">
+            <span class="eyebrow"><i class="bi bi-gift"></i>KP Wallet</span>
+            <h1 class="h3">Daily KP Bonus</h1>
+            <p class="text-muted mb-0">Claim +10 KP once every 24 hours.</p>
+        </section>
+
+        <div class="card form-shell">
             <div class="card-body p-4">
-                <h1 class="h3 mb-2">Daily KP Bonus</h1>
-                <p class="text-muted mb-4">Claim +10 KP once every 24 hours.</p>
+                <div class="surface-block p-3 mb-4 text-center">
+                    <div class="small text-muted text-uppercase fw-bold mb-1">Bonus Value</div>
+                    <div class="h2 text-success mb-0">+10 KP</div>
+                </div>
 
                 {% if can_claim %}
                     <form method="post">

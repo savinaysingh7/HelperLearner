@@ -1,15 +1,24 @@
-﻿{% extends 'base.html' %}
+{% extends 'base.html' %}
 
 {% block title %}{% if is_edit %}Edit Request{% else %}Post Request{% endif %} | HelperLearner{% endblock %}
 
 {% block content %}
 <div class="row justify-content-center">
-    <div class="col-12 col-lg-8 col-xl-7">
+    <div class="col-12 col-lg-9 col-xl-8">
+        <section class="page-head">
+            {% if is_edit %}
+                <span class="eyebrow"><i class="bi bi-pencil-square"></i>Request Editor</span>
+                <h1 class="h3">Edit Help Request</h1>
+                <p class="text-muted mb-0">Update details while your request is still open.</p>
+            {% else %}
+                <span class="eyebrow"><i class="bi bi-journal-plus"></i>New Request</span>
+                <h1 class="h3">Post a Help Request</h1>
+                <p class="text-muted mb-0">Create a clear request so other developers can pick it up quickly.</p>
+            {% endif %}
+        </section>
+
         <div class="card form-shell">
             <div class="card-body p-4 p-md-5">
-                <h1 class="h3 mb-3">{% if is_edit %}Edit Help Request{% else %}Post a Help Request{% endif %}</h1>
-                <p class="text-muted">Create a clear request so other developers can pick it up quickly.</p>
-
                 <form method="post" novalidate>
                     {% csrf_token %}
 

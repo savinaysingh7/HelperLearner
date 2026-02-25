@@ -184,3 +184,14 @@ LOGGING = {
         "level": "WARNING",
     },
 }
+
+if "test" in sys.argv:
+    # Keep test runs deterministic and avoid mutating tracked log files.
+    LOGGING["handlers"].pop("file", None)
+    for logger_name in ["django", "marketplace", "accounts", "notifications", "root"]:
+        if logger_name == "root":
+            handlers = LOGGING.get("root", {}).get("handlers", [])
+        else:
+            handlers = LOGGING["loggers"][logger_name].get("handlers", [])
+        if "file" in handlers:
+            handlers.remove("file")

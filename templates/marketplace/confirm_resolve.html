@@ -1,13 +1,13 @@
-﻿{% extends 'base.html' %}
+{% extends 'base.html' %}
 
 {% block title %}Resolve Request | HelperLearner{% endblock %}
 
 {% block content %}
 <div class="row justify-content-center">
-    <div class="col-12 col-md-8 col-lg-6">
-        <div class="card text-center">
-            <div class="card-body p-4">
-                <div class="display-6 text-success mb-3"><i class="bi bi-check2-circle"></i></div>
+    <div class="col-12 col-lg-6">
+        <div class="card confirm-card text-center">
+            <div class="card-body p-4 p-md-5">
+                <div class="confirm-icon success mx-auto"><i class="bi bi-check2-circle"></i></div>
                 <h1 class="h4 mb-3">Resolve this request?</h1>
                 <p class="text-muted">Marking <strong>{{ req.title }}</strong> as resolved will transfer <strong>{{ req.kp_bounty }} KP</strong> to <strong>{{ req.accepted_by.username }}</strong>.</p>
                 <form method="post" class="d-flex flex-column flex-sm-row gap-2 justify-content-center mt-4">

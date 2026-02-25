@@ -5,13 +5,17 @@
 {% block content %}
 <div class="row g-4">
     <section class="col-12 col-xl-8">
+        <section class="page-head mb-3">
+            <span class="eyebrow"><i class="bi bi-rss-fill"></i>Personalized</span>
+            <h1 class="h3">My Activity Feed</h1>
+            <p class="text-muted mb-0">Updates from collaborators, matching-skill requests, and threads you joined.</p>
+        </section>
+
         <div class="card">
             <div class="card-body">
-                <h1 class="h3 mb-3">My Activity Feed</h1>
-
                 {% for item in feed_items %}
-                    <article class="feed-item border rounded-3 p-3 mb-3 d-flex gap-3">
-                        <div class="feed-icon fs-4 text-primary"><i class="bi {{ item.icon }}"></i></div>
+                    <article class="feed-item {% if item.type == 'interaction_post' %}event-post{% elif item.type == 'skill_match_open' %}event-skill{% else %}event-resolved{% endif %} border rounded-3 p-3 mb-3 d-flex gap-3">
+                        <div class="feed-icon fs-5"><i class="bi {{ item.icon }}"></i></div>
                         <div class="flex-grow-1">
                             <p class="mb-1">{{ item.description }}</p>
                             <div class="small text-muted d-flex flex-wrap gap-2 align-items-center">
@@ -67,7 +71,7 @@
                         <a href="{% url 'request_detail' req.pk %}" class="fw-semibold text-decoration-none d-block mb-1">{{ req.title }}</a>
                         <div class="small text-muted mb-2">Posted by {{ req.user.username }}</div>
                         <div class="d-flex justify-content-between align-items-center">
-                            <span class="badge text-bg-light border">{{ req.skill_needed }}</span>
+                            <span class="badge badge-soft">{{ req.skill_needed }}</span>
                             <span class="fw-semibold text-success">{{ req.kp_bounty }} KP</span>
                         </div>
                     </article>

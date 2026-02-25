@@ -1,19 +1,22 @@
-﻿{% extends 'base.html' %}
+{% extends 'base.html' %}
 
 {% block title %}Notifications | HelperLearner{% endblock %}
 
 {% block content %}
 <div class="row justify-content-center">
-    <div class="col-12 col-lg-9 col-xl-8">
-        <div class="d-flex justify-content-between align-items-center mb-3">
-            <h1 class="h3 mb-0">Notifications</h1>
-            <span class="text-muted small">All notifications are marked read when opened.</span>
-        </div>
+    <div class="col-12 col-xl-9">
+        <section class="page-head d-flex flex-column flex-md-row justify-content-between align-items-md-end gap-2">
+            <div>
+                <span class="eyebrow"><i class="bi bi-bell"></i>Inbox</span>
+                <h1 class="h3 mb-1">Notifications</h1>
+                <p class="text-muted mb-0">All notifications are marked read when opened.</p>
+            </div>
+        </section>
 
         <div class="card">
-            <ul class="list-group list-group-flush">
+            <div class="card-body">
                 {% for notification in notifications %}
-                    <li class="list-group-item py-3">
+                    <article class="notification-item {% if not notification.is_read %}unread{% endif %}">
                         <div class="d-flex justify-content-between align-items-start gap-3">
                             <div>
                                 <a href="{{ notification.link }}" class="text-decoration-none fw-semibold">{{ notification.message }}</a>
@@ -25,17 +28,15 @@
                                 <span class="badge text-bg-primary">New</span>
                             {% endif %}
                         </div>
-                    </li>
+                    </article>
                 {% empty %}
-                    <li class="list-group-item">
-                        <div class="empty-state text-center">
-                            <div class="icon"><i class="bi bi-bell-slash"></i></div>
-                            <h2 class="h5 mt-2">No notifications yet</h2>
-                            <p class="text-muted mb-0">When request activity happens, you will see updates here.</p>
-                        </div>
-                    </li>
+                    <div class="empty-state text-center">
+                        <div class="icon"><i class="bi bi-bell-slash"></i></div>
+                        <h2 class="h5 mt-2">No notifications yet</h2>
+                        <p class="text-muted mb-0">When request activity happens, you will see updates here.</p>
+                    </div>
                 {% endfor %}
-            </ul>
+            </div>
         </div>
     </div>
 </div>
