@@ -11,6 +11,8 @@ router.register(r'skills', views.SkillViewSet, basename='api-skill')
 urlpatterns = [
     path('', views.home, name='home'),
     path('browse/', views.request_list, name='request_list'),
+    path('search/', views.unified_search, name='search'),
+    path('feed/', views.activity_feed, name='activity_feed'),
     path('post/', views.create_request, name='create_request'),
     path('request/<int:pk>/', views.request_detail, name='request_detail'),
     path('request/<int:pk>/edit/', views.edit_request, name='edit_request'),
@@ -22,5 +24,6 @@ urlpatterns = [
     path('skills/', views.skill_browse, name='skill_browse'),
     path('tags/', views.tag_browse, name='tag_browse'),
     path('leaderboard/', views.leaderboard, name='leaderboard'),
+    path('api/search/', views.SearchViewSet.as_view({'get': 'list'}), name='api-search'),
     path('api/', include(router.urls)),
 ]

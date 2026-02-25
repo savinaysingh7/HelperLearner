@@ -1,0 +1,84 @@
+{% extends 'base.html' %}
+
+{% block title %}Activity Feed | HelperLearner{% endblock %}
+
+{% block content %}
+<div class="row g-4">
+    <section class="col-12 col-xl-8">
+        <div class="card">
+            <div class="card-body">
+                <h1 class="h3 mb-3">My Activity Feed</h1>
+
+                {% for item in feed_items %}
+                    <article class="border rounded-3 p-3 mb-3 d-flex gap-3">
+                        <div class="fs-4 text-primary"><i class="bi {{ item.icon }}"></i></div>
+                        <div class="flex-grow-1">
+                            <p class="mb-1">{{ item.description }}</p>
+                            <div class="small text-muted d-flex flex-wrap gap-2 align-items-center">
+                                <span>{{ item.timestamp|timesince }} ago</span>
+                                <span>&middot;</span>
+                                <a href="{% url 'request_detail' item.request.pk %}" class="text-decoration-none">View request</a>
+                            </div>
+                        </div>
+                    </article>
+                {% empty %}
+                    <div class="empty-state text-center">
+                        <div class="icon"><i class="bi bi-rss"></i></div>
+                        <h2 class="h5 mt-2">No relevant activity yet</h2>
+                        <p class="text-muted mb-0">As you interact with requests, personalized events will appear here.</p>
+                    </div>
+                {% endfor %}
+
+                {% if page_obj.paginator.num_pages > 1 %}
+                    <nav aria-label="Feed pages" class="mt-4">
+                        <ul class="pagination justify-content-center mb-0">
+                            {% if page_obj.has_previous %}
+                                <li class="page-item">
+                                    <a class="page-link" href="?page={{ page_obj.previous_page_number }}">Previous</a>
+                                </li>
+                            {% else %}
+                                <li class="page-item disabled"><span class="page-link">Previous</span></li>
+                            {% endif %}
+
+                            <li class="page-item disabled">
+                                <span class="page-link">Page {{ page_obj.number }} of {{ page_obj.paginator.num_pages }}</span>
+                            </li>
+
+                            {% if page_obj.has_next %}
+                                <li class="page-item">
+                                    <a class="page-link" href="?page={{ page_obj.next_page_number }}">Next</a>
+                                </li>
+                            {% else %}
+                                <li class="page-item disabled"><span class="page-link">Next</span></li>
+                            {% endif %}
+                        </ul>
+                    </nav>
+                {% endif %}
+            </div>
+        </div>
+    </section>
+
+    <aside class="col-12 col-xl-4">
+        <div class="card">
+            <div class="card-body">
+                <h2 class="h5 mb-3">Suggested Requests</h2>
+                {% for req in suggested_requests %}
+                    <article class="border rounded-3 p-3 mb-3">
+                        <a href="{% url 'request_detail' req.pk %}" class="fw-semibold text-decoration-none d-block mb-1">{{ req.title }}</a>
+                        <div class="small text-muted mb-2">Posted by {{ req.user.username }}</div>
+                        <div class="d-flex justify-content-between align-items-center">
+                            <span class="badge text-bg-light border">{{ req.skill_needed }}</span>
+                            <span class="fw-semibold text-success">{{ req.kp_bounty }} KP</span>
+                        </div>
+                    </article>
+                {% empty %}
+                    <div class="empty-state text-center py-4">
+                        <div class="icon"><i class="bi bi-stars"></i></div>
+                        <p class="text-muted mb-0 mt-2">No new suggested requests right now.</p>
+                    </div>
+                {% endfor %}
+            </div>
+        </div>
+    </aside>
+</div>
+{% endblock %}
