@@ -19,7 +19,7 @@ from rest_framework.response import Response
 from accounts.models import CustomUser
 
 from .forms import CommentForm, HelpRequestForm, RatingForm, SearchForm
-from .models import HelpRequest, Rating, Skill, Tag
+from .models import Comment, HelpRequest, Rating, Skill, Tag
 from .serializers import (
     HelpRequestSerializer,
     PublicCommentSerializer,
@@ -43,6 +43,64 @@ def home(request):
         ),
     }
     return render(request, 'marketplace/home.html', context)
+
+
+def _search_querysets(query):
+    """Return grouped request/user/skill search querysets for a single free-text query."""
+    normalized_query = query.strip()
+    if not normalized_query:
+        return HelpRequest.objects.none(), CustomUser.objects.none(), Skill.objects.none()
+
+    request_results = (
+        HelpRequest.objects.select_related('user', 'accepted_by', 'skill_needed')
+        .prefetch_related('tags')
+        .filter(
+            Q(title__icontains=normalized_query)
+            | Q(description__icontains=normalized_query)
+            | Q(tags__name__icontains=normalized_query)
+            | Q(skill_needed__name__icontains=normalized_query)
+            | Q(user__username__icontains=normalized_query)
+            | Q(accepted_by__username__icontains=normalized_query)
+        )
+        .distinct()
+        .order_by('-created_at')
+    )
+
+    user_results = (
+        CustomUser.objects.prefetch_related('skills')
+        .annotate(avg_rating=Avg('ratings_received__score'))
+        .filter(Q(username__icontains=normalized_query) | Q(skills__name__icontains=normalized_query))
+        .distinct()
+        .order_by('username')
+    )
+
+    skill_results = (
+        Skill.objects.annotate(request_count=Count('helprequest', distinct=True))
+        .filter(name__icontains=normalized_query)
+        .distinct()
+        .order_by('name')
+    )
+
+    return request_results, user_results, skill_results
+
+
+def unified_search(request):
+    """Search requests, users, and skills together and render grouped discovery results."""
+    query = request.GET.get('q', '').strip()
+    request_results, user_results, skill_results = _search_querysets(query)
+    has_results = request_results.exists() or user_results.exists() or skill_results.exists()
+
+    context = {
+        'query': query,
+        'request_results': request_results[:20],
+        'user_results': user_results[:20],
+        'skill_results': skill_results[:20],
+        'request_count': request_results.count() if query else 0,
+        'user_count': user_results.count() if query else 0,
+        'skill_count': skill_results.count() if query else 0,
+        'has_results': has_results if query else False,
+    }
+    return render(request, 'marketplace/search_results.html', context)
 
 
 def request_list(request):

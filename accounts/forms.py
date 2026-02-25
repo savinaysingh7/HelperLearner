@@ -40,3 +40,18 @@ class UserUpdateForm(forms.ModelForm):
             'email': forms.EmailInput(attrs={'class': 'form-control'}),
             'bio': forms.Textarea(attrs={'class': 'form-control', 'rows': 4}),
         }
+
+
+class KPTransferLookupForm(forms.Form):
+    """Form for preparing a KP transfer confirmation request."""
+
+    recipient_username = forms.CharField(
+        label='Recipient Username',
+        max_length=150,
+        widget=forms.TextInput(attrs={'class': 'form-control', 'placeholder': 'recipient_username'}),
+    )
+    amount = forms.IntegerField(
+        min_value=5,
+        label='Amount (KP)',
+        widget=forms.NumberInput(attrs={'class': 'form-control', 'min': 5, 'step': 1}),
+    )

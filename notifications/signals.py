@@ -1,10 +1,42 @@
-﻿from django.db.models.signals import post_save, pre_save
+import logging
+
+from django.conf import settings
+from django.core.mail import send_mail
+from django.db.models.signals import post_save, pre_save
 from django.dispatch import receiver
+from django.template.loader import render_to_string
 from django.urls import reverse
+from django.utils.html import strip_tags
 
 from marketplace.models import HelpRequest
 
 from .models import Notification
+
+logger = logging.getLogger(__name__)
+
+
+def _send_notification_email(subject, template_name, context, recipient_email):
+    """Safely send notification email and log failures without raising."""
+    if not recipient_email:
+        return
+
+    try:
+        html_body = render_to_string(template_name, context)
+        send_mail(
+            subject=subject,
+            message=strip_tags(html_body),
+            from_email=getattr(settings, 'DEFAULT_FROM_EMAIL', None),
+            recipient_list=[recipient_email],
+            html_message=html_body,
+            fail_silently=False,
+        )
+    except Exception:
+        logger.exception(
+            'Failed to send notification email: subject=%s template=%s recipient=%s',
+            subject,
+            template_name,
+            recipient_email,
+        )
 
 
 @receiver(pre_save, sender=HelpRequest)
@@ -20,7 +52,7 @@ def cache_previous_status(sender, instance, **kwargs):
 
 @receiver(post_save, sender=HelpRequest)
 def create_help_request_notifications(sender, instance, created, **kwargs):
-    """Create notifications when HelpRequest status transitions to key workflow states."""
+    """Create in-app notifications and send email on request status transitions."""
     if created:
         return
 
@@ -36,15 +68,36 @@ def create_help_request_notifications(sender, instance, created, **kwargs):
             message='Someone accepted your request!',
             link=detail_link,
         )
+        if instance.accepted_by:
+            _send_notification_email(
+                subject=f"Your request '{instance.title}' has been accepted by {instance.accepted_by.username}.",
+                template_name='emails/claim_notification.html',
+                context={'request_obj': instance, 'poster': instance.user, 'helper': instance.accepted_by},
+                recipient_email=instance.user.email,
+            )
+
     elif instance.status == 'resolved' and instance.accepted_by:
         Notification.objects.create(
             user=instance.accepted_by,
             message=f'Your help was marked resolved! You earned {instance.kp_bounty} KP.',
             link=detail_link,
         )
+        _send_notification_email(
+            subject=f"Your request '{instance.title}' was resolved. {instance.kp_bounty} KP were paid to {instance.accepted_by.username}.",
+            template_name='emails/resolve_notification.html',
+            context={'request_obj': instance, 'poster': instance.user, 'helper': instance.accepted_by},
+            recipient_email=instance.user.email,
+        )
+
     elif instance.status == 'canceled' and instance.accepted_by:
         Notification.objects.create(
             user=instance.accepted_by,
             message='The request you were working on was canceled.',
             link=detail_link,
+        )
+        _send_notification_email(
+            subject=f"The request '{instance.title}' was canceled.",
+            template_name='emails/cancel_notification.html',
+            context={'request_obj': instance, 'poster': instance.user, 'helper': instance.accepted_by},
+            recipient_email=instance.accepted_by.email,
         )
