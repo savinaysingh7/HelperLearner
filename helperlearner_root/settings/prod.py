@@ -7,8 +7,15 @@ from django.core.exceptions import ImproperlyConfigured
 DEBUG = False
 
 SECRET_KEY = config('SECRET_KEY')
-if SECRET_KEY in {'unsafe-secret-for-dev', 'dev-secret-for-helperlearner-please-change'}:
-    raise ImproperlyConfigured('Set a strong SECRET_KEY for production.')
+if (
+    SECRET_KEY in {'unsafe-secret-for-dev', 'dev-secret-for-helperlearner-please-change'}
+    or len(SECRET_KEY) < 50
+    or len(set(SECRET_KEY)) < 5
+    or SECRET_KEY.startswith('django-insecure-')
+):
+    raise ImproperlyConfigured(
+        'Set a long, random SECRET_KEY for production (minimum 50 chars, high entropy).'
+    )
 
 ALLOWED_HOSTS = config(
     'ALLOWED_HOSTS',
