@@ -49,6 +49,18 @@ Production reads SMTP settings from environment variables:
 - `EMAIL_USE_TLS` (optional, defaults to `True`)
 - `DEFAULT_FROM_EMAIL` (optional, defaults to `no-reply@helperlearner.local`)
 
+## Production Configuration
+Use `helperlearner_root.settings.prod` with explicit secure environment variables.
+
+Required:
+- `DATABASE_URL`
+- `SECRET_KEY` (must be long/random: minimum 50 chars, high entropy)
+- `ALLOWED_HOSTS` (comma-separated hostnames; wildcard `*` is rejected)
+
+Notes:
+- `DEBUG` is always `False` in production settings.
+- `SECURE_PROXY_SSL_HEADER` is enabled for reverse-proxy deployments.
+
 ## Request Expiry Command
 Expire overdue open requests (cancel + refund + notify):
 ```bash
