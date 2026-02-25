@@ -3,6 +3,8 @@ from .models import HelpRequest, Comment, Skill
 
 
 class HelpRequestForm(forms.ModelForm):
+    """Form for creating help requests with bootstrap-friendly widgets."""
+
     class Meta:
         model = HelpRequest
         fields = ['title', 'description', 'skill_needed', 'kp_bounty']
@@ -10,7 +12,7 @@ class HelpRequestForm(forms.ModelForm):
             'title': forms.TextInput(attrs={'class': 'form-control', 'placeholder': 'e.g., Python script bug'}),
             'description': forms.Textarea(attrs={'class': 'form-control', 'rows': 4}),
             'skill_needed': forms.Select(attrs={'class': 'form-select'}),
-            'kp_bounty': forms.NumberInput(attrs={'class': 'form-control'}),
+            'kp_bounty': forms.NumberInput(attrs={'class': 'form-control', 'min': 1, 'step': 1}),
         }
 
     def clean_kp_bounty(self):
@@ -21,6 +23,8 @@ class HelpRequestForm(forms.ModelForm):
 
 
 class CommentForm(forms.ModelForm):
+    """Form for request discussion comments."""
+
     class Meta:
         model = Comment
         fields = ['content', 'is_private']
@@ -37,9 +41,14 @@ class CommentForm(forms.ModelForm):
         }
 
 class SearchForm(forms.Form):
-    q = forms.CharField(label='Search', required=False)
+    q = forms.CharField(
+        label='Search',
+        required=False,
+        widget=forms.TextInput(attrs={'class': 'form-control', 'placeholder': 'Search title or description'}),
+    )
     skill = forms.ModelChoiceField(
         queryset=Skill.objects.all(),
         required=False,
-        empty_label="All Skills"
+        empty_label='All Skills',
+        widget=forms.Select(attrs={'class': 'form-select'}),
     )

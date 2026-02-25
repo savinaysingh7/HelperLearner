@@ -1,85 +1,104 @@
-{% extends 'base.html' %}
+﻿{% extends 'base.html' %}
+
+{% block title %}Browse Requests | HelperLearner{% endblock %}
 
 {% block content %}
-<div class="row">
-    <div class="col-md-3 mb-4">
-        <div class="card shadow-sm border-0">
+<div class="row g-4">
+    <aside class="col-12 col-lg-3">
+        <div class="card form-shell h-100">
             <div class="card-body">
-                <h5 class="card-title mb-3">Filter & Search</h5>
+                <h2 class="h5 mb-3">Filter Requests</h2>
                 <form method="get" action="{% url 'request_list' %}">
-                    {{ form.as_p }}
-                    <button class="btn btn-primary w-100" type="submit">Search</button>
+                    <div class="mb-3">
+                        <label for="{{ form.q.id_for_label }}" class="form-label">Keyword</label>
+                        {{ form.q }}
+                    </div>
+                    <div class="mb-3">
+                        <label for="{{ form.skill.id_for_label }}" class="form-label">Skill</label>
+                        {{ form.skill }}
+                    </div>
+                    <div class="d-grid gap-2">
+                        <button class="btn btn-primary" type="submit">Search</button>
+                        {% if request.GET.q or request.GET.skill %}
+                            <a href="{% url 'request_list' %}" class="btn btn-outline-secondary">Clear</a>
+                        {% endif %}
+                    </div>
                 </form>
-
-                {% if request.GET.q or request.GET.skill %}
-                    <a href="{% url 'request_list' %}" class="btn btn-link btn-sm mt-2 text-danger w-100">Clear Filter</a>
-                {% endif %}
             </div>
         </div>
-    </div>
+    </aside>
 
-    <div class="col-md-9">
-        <h2 class="mb-4">{% if request.GET.q %} Results for "{{ request.GET.q }}" {% else %} Browse Help Requests {% endif %}</h2>
-        <div class="row">
+    <section class="col-12 col-lg-9">
+        <div class="d-flex flex-column flex-md-row justify-content-between align-items-md-center mb-3">
+            <h1 class="h3 mb-2 mb-md-0">
+                {% if request.GET.q %}
+                    Results for "{{ request.GET.q }}"
+                {% else %}
+                    Open Help Requests
+                {% endif %}
+            </h1>
+            <span class="text-muted small">{{ page_obj.paginator.count }} result{{ page_obj.paginator.count|pluralize }}</span>
+        </div>
+
+        <div class="row g-3">
             {% for req in requests %}
-            <div class="col-md-12 mb-3">
-                <div class="card shadow-sm h-100">
-                    <div class="card-body d-flex justify-content-between align-items-center">
-                        <div>
-                            <h5 class="card-title mb-1">{{ req.title }}</h5>
-                            <span class="badge bg-info text-dark mb-2">{{ req.skill_needed }}</span>
-                            <p class="card-text text-muted small">{{ req.description|truncatewords:15 }}</p>
+                <div class="col-12">
+                    <article class="card">
+                        <div class="card-body">
+                            <div class="d-flex flex-column flex-md-row gap-3 justify-content-between align-items-md-center">
+                                <div>
+                                    <h2 class="h5 mb-1">{{ req.title }}</h2>
+                                    <div class="d-flex flex-wrap gap-2 mb-2">
+                                        <span class="badge text-bg-light border">{{ req.skill_needed }}</span>
+                                        <span class="badge {% if req.status == 'open' %}text-bg-success{% else %}text-bg-warning{% endif %}">{{ req.get_status_display }}</span>
+                                    </div>
+                                    <p class="text-muted small mb-0">{{ req.description|truncatewords:20 }}</p>
+                                </div>
+                                <div class="text-md-end">
+                                    <div class="h5 text-success mb-2">{{ req.kp_bounty }} KP</div>
+                                    <a href="{% url 'request_detail' req.pk %}" class="btn btn-primary btn-sm">View Details</a>
+                                </div>
+                            </div>
                         </div>
-                        <div class="text-end">
-                            <h4 class="text-success mb-2">{{ req.kp_bounty }} KP</h4>
-                            <a href="{% url 'request_detail' req.pk %}" class="btn btn-primary btn-sm">View & Claim</a>
-                        </div>
+                    </article>
+                </div>
+            {% empty %}
+                <div class="col-12">
+                    <div class="empty-state text-center">
+                        <div class="icon"><i class="bi bi-inbox"></i></div>
+                        <h2 class="h5 mt-2">No requests matched your filters</h2>
+                        <p class="text-muted mb-3">Try a different keyword or clear the selected skill.</p>
+                        <a href="{% url 'request_list' %}" class="btn btn-outline-secondary">Back to all requests</a>
                     </div>
                 </div>
-            </div>
-            {% empty %}
-            <div class="text-center py-5">
-                <i class="bi bi-inbox-fill display-1 text-muted"></i>
-                <p class="lead text-muted mt-3">No requests found matching your search.</p>
-                <a href="{% url 'request_list' %}" class="btn btn-outline-secondary">Back to all requests</a>
-            </div>
             {% endfor %}
         </div>
 
-        <!-- Pagination -->
-        <nav aria-label="Page navigation" class="mt-4">
-            <ul class="pagination justify-content-center">
-                {% if page_obj.has_previous %}
-                    <li class="page-item">
-                        <a class="page-link" href="?page={{ page_obj.previous_page_number }}&q={{ request.GET.q }}&skill={{ request.GET.skill }}" aria-label="Previous">
-                            <span aria-hidden="true">&laquo; Previous</span>
-                        </a>
-                    </li>
-                {% else %}
-                    <li class="page-item disabled">
-                        <span class="page-link">&laquo; Previous</span>
-                    </li>
-                {% endif %}
+        {% if page_obj.paginator.num_pages > 1 %}
+            <nav aria-label="Request pages" class="mt-4">
+                <ul class="pagination justify-content-center flex-wrap gap-1">
+                    {% if page_obj.has_previous %}
+                        <li class="page-item">
+                            <a class="page-link" href="?page={{ page_obj.previous_page_number }}&q={{ request.GET.q }}&skill={{ request.GET.skill }}">Previous</a>
+                        </li>
+                    {% else %}
+                        <li class="page-item disabled"><span class="page-link">Previous</span></li>
+                    {% endif %}
 
-                <li class="page-item disabled">
-                    <span class="page-link">
-                        Page {{ page_obj.number }} of {{ page_obj.paginator.num_pages }}
-                    </span>
-                </li>
-
-                {% if page_obj.has_next %}
-                    <li class="page-item">
-                        <a class="page-link" href="?page={{ page_obj.next_page_number }}&q={{ request.GET.q }}&skill={{ request.GET.skill }}" aria-label="Next">
-                            <span aria-hidden="true">Next &raquo;</span>
-                        </a>
-                    </li>
-                {% else %}
                     <li class="page-item disabled">
-                        <span class="page-link">Next &raquo;</span>
+                        <span class="page-link">Page {{ page_obj.number }} of {{ page_obj.paginator.num_pages }}</span>
                     </li>
-                {% endif %}
-            </ul>
-        </nav>
-    </div>
+
+                    {% if page_obj.has_next %}
+                        <li class="page-item">
+                            <a class="page-link" href="?page={{ page_obj.next_page_number }}&q={{ request.GET.q }}&skill={{ request.GET.skill }}">Next</a>
+                        </li>
+                    {% else %}
+                        <li class="page-item disabled"><span class="page-link">Next</span></li>
+                    {% endif %}
+                </ul>
+            </nav>
+        {% endif %}
+    </section>
 </div>
 {% endblock %}

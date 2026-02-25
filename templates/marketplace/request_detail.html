@@ -1,110 +1,122 @@
-{% extends 'base.html' %}
+﻿{% extends 'base.html' %}
+
+{% block title %}{{ req.title }} | HelperLearner{% endblock %}
 
 {% block content %}
 <div class="row justify-content-center">
-    <div class="col-md-8">
-        <nav aria-label="breadcrumb">
+    <div class="col-12 col-xl-10">
+        <nav aria-label="breadcrumb" class="mb-3">
             <ol class="breadcrumb">
                 <li class="breadcrumb-item"><a href="{% url 'request_list' %}">Browse</a></li>
-                <li class="breadcrumb-item active">{{ req.title }}</li>
+                <li class="breadcrumb-item active" aria-current="page">Request Details</li>
             </ol>
         </nav>
 
-        <div class="card shadow-sm border-0">
+        <article class="card mb-4">
             <div class="card-body p-4">
-                <div class="d-flex justify-content-between align-items-start">
-                    <h1 class="h2">{{ req.title }}</h1>
-                    <span class="badge {% if req.status == 'open' %}bg-success{% elif req.status == 'resolved' %}bg-secondary{% else %}bg-warning text-dark{% endif %}">{{ req.get_status_display }}</span>
+                <div class="d-flex flex-column flex-md-row justify-content-between gap-3 align-items-md-start">
+                    <h1 class="h3 mb-0">{{ req.title }}</h1>
+                    <span class="badge {% if req.status == 'open' %}text-bg-success{% elif req.status == 'resolved' or req.status == 'canceled' %}text-bg-secondary{% else %}text-bg-warning{% endif %}">{{ req.get_status_display }}</span>
                 </div>
-                
-                <p class="text-muted">Posted by <strong>{{ req.user.username }}</strong> in <span class="badge bg-info text-dark">{{ req.skill_needed }}</span></p>
-                <hr>
-                
-                <h5 class="mt-4">Description</h5>
-                <p class="lead">{{ req.description }}</p>
-                
-                <div class="bg-light p-3 rounded mt-4 d-flex justify-content-between align-items-center">
-                    <span>Reward Bounty: <strong class="text-success h4">{{ req.kp_bounty }} KP</strong></span>
-                    
-                    {% if req.status == 'open' %}
-                        {% if user.is_authenticated and user != req.user %}
-                            <form action="{% url 'claim_request' req.pk %}" method="post">
-                                {% csrf_token %}
-                                <button type="submit" class="btn btn-primary btn-lg">Accept & Start Helping</button>
-                            </form>
-                        {% elif user == req.user %}
-                            <div>
-                                <span class="text-muted italic me-2">This is your own post.</span>
-                                <a href="{% url 'cancel_request' req.pk %}" class="btn btn-outline-danger btn-sm">Cancel Request</a>
-                            </div>
-                        {% endif %}
-                    {% elif req.status == 'in_progress' %}
-                        <div class="d-flex justify-content-between align-items-center w-100">
-                            <span class="text-warning fw-bold">Currently being solved by {{ req.accepted_by.username }}</span>
-                            
-                            {% if user == req.user %}
-                                <div>
-                                    <a href="{% url 'resolve_request' req.pk %}" class="btn btn-success">Mark as Resolved</a>
-                                    <a href="{% url 'cancel_request' req.pk %}" class="btn btn-danger">Cancel Request</a>
-                                </div>
-                            {% endif %}
-                        </div>
-                    {% elif req.status == 'resolved' %}
-                        <span class="text-success fw-bold">Successfully Resolved! Reward Paid to {{ req.accepted_by.username }}.</span>
+
+                <p class="text-muted mt-2 mb-3">
+                    Posted by <strong>{{ req.user.username }}</strong>
+                    {% if req.skill_needed %}
+                        in <span class="badge text-bg-light border">{{ req.skill_needed }}</span>
                     {% endif %}
-                </div>
-            </div>
-        </div>
+                </p>
 
-        <hr class="my-5">
+                <h2 class="h5">Description</h2>
+                <p class="mb-4">{{ req.description }}</p>
 
-        <div class="row">
-            <div class="col-md-10 mx-auto">
-                <h3>Discussion</h3>
-                
-                {% if user.is_authenticated %}
-                <div class="card mb-4 shadow-sm">
-                    <div class="card-body">
-                        <form method="post">
-                            {% csrf_token %}
-                            <div class="mb-3">
-                                {{ form.content }}
-                            </div>
-                            {% if req.status == 'in_progress' and user == req.user or user == req.accepted_by %}
-                                {% if req.status == 'in_progress' %}
-                                <div class="form-check mb-2">
-                                    {{ form.is_private }}
-                                    <label class="form-check-label" for="{{ form.is_private.id_for_label }}">
-                                        Private (only visible to requester and helper)
-                                    </label>
-                                </div>
-                                {% endif %}
-                            {% endif %}
-                            <button type="submit" class="btn btn-secondary btn-sm mt-2">Post Comment</button>
-                        </form>
+                <section class="bg-light p-3 rounded-4 d-flex flex-column flex-md-row justify-content-between gap-3 align-items-md-center">
+                    <div>
+                        <div class="text-muted small">Reward Bounty</div>
+                        <div class="h4 text-success mb-0">{{ req.kp_bounty }} KP</div>
                     </div>
-                </div>
+
+                    <div class="d-flex flex-wrap gap-2">
+                        {% if req.status == 'open' %}
+                            {% if user.is_authenticated and user != req.user %}
+                                <form action="{% url 'claim_request' req.pk %}" method="post" class="m-0">
+                                    {% csrf_token %}
+                                    <button type="submit" class="btn btn-primary">Accept Request</button>
+                                </form>
+                            {% elif user == req.user %}
+                                <a href="{% url 'cancel_request' req.pk %}" class="btn btn-outline-danger">Cancel Request</a>
+                            {% endif %}
+                        {% elif req.status == 'in_progress' %}
+                            <span class="fw-semibold text-warning-emphasis align-self-center">Being solved by {{ req.accepted_by.username }}</span>
+                            {% if user == req.user %}
+                                <a href="{% url 'resolve_request' req.pk %}" class="btn btn-success">Mark Resolved</a>
+                                <a href="{% url 'cancel_request' req.pk %}" class="btn btn-outline-danger">Cancel</a>
+                            {% endif %}
+                        {% elif req.status == 'resolved' %}
+                            <span class="fw-semibold text-success align-self-center">Resolved and paid out to {{ req.accepted_by.username }}.</span>
+                        {% elif req.status == 'canceled' %}
+                            <span class="fw-semibold text-muted align-self-center">This request was canceled and escrow refunded.</span>
+                        {% endif %}
+                    </div>
+                </section>
+            </div>
+        </article>
+
+        <section class="row justify-content-center">
+            <div class="col-12 col-lg-10">
+                <h2 class="h4 mb-3">Discussion</h2>
+
+                {% if user.is_authenticated %}
+                    <div class="card mb-4 form-shell">
+                        <div class="card-body">
+                            <form method="post" novalidate>
+                                {% csrf_token %}
+                                <div class="mb-3">
+                                    <label for="{{ form.content.id_for_label }}" class="form-label">Add a comment</label>
+                                    {{ form.content }}
+                                    {% for error in form.content.errors %}
+                                        <div class="text-danger small">{{ error }}</div>
+                                    {% endfor %}
+                                </div>
+
+                                {% if req.status == 'in_progress' %}
+                                    {% if user == req.user or user == req.accepted_by %}
+                                        <div class="form-check mb-3">
+                                            {{ form.is_private }}
+                                            <label class="form-check-label" for="{{ form.is_private.id_for_label }}">Private (visible only to requester and helper)</label>
+                                        </div>
+                                    {% endif %}
+                                {% endif %}
+
+                                <button type="submit" class="btn btn-secondary">Post Comment</button>
+                            </form>
+                        </div>
+                    </div>
                 {% endif %}
 
                 {% for comment in comments %}
-                <div class="card mb-3 border-0 bg-light {% if comment.is_private %}border-start border-warning border-4{% endif %}">
-                    <div class="card-body py-2">
-                        <div class="d-flex justify-content-between">
-                            <strong>{{ comment.user.username }} 
-                                {% if comment.is_private %}
-                                <span class="badge bg-warning text-dark ms-2 small" style="font-size: 0.7rem;">Private</span>
-                                {% endif %}
-                            </strong>
-                            <small class="text-muted">{{ comment.created_at|timesince }} ago</small>
+                    <article class="card mb-3 {% if comment.is_private %}private-comment{% endif %}">
+                        <div class="card-body py-3">
+                            <div class="d-flex justify-content-between align-items-center mb-1">
+                                <strong>
+                                    {{ comment.user.username }}
+                                    {% if comment.is_private %}
+                                        <span class="badge private-comment-badge ms-2">Private</span>
+                                    {% endif %}
+                                </strong>
+                                <small class="text-muted">{{ comment.created_at|timesince }} ago</small>
+                            </div>
+                            <p class="mb-0">{{ comment.content }}</p>
                         </div>
-                        <p class="mb-0">{{ comment.content }}</p>
-                    </div>
-                </div>
+                    </article>
                 {% empty %}
-                <p class="text-muted">No comments yet. Start the conversation!</p>
+                    <div class="empty-state text-center">
+                        <div class="icon"><i class="bi bi-chat-square-text"></i></div>
+                        <h3 class="h5 mt-2">No comments yet</h3>
+                        <p class="text-muted mb-0">Start the conversation and unblock this request.</p>
+                    </div>
                 {% endfor %}
             </div>
-        </div>
+        </section>
     </div>
 </div>
 {% endblock %}

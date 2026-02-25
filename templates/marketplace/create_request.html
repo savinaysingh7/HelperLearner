@@ -1,15 +1,62 @@
-{% extends 'base.html' %}
+﻿{% extends 'base.html' %}
+
+{% block title %}Post Request | HelperLearner{% endblock %}
 
 {% block content %}
 <div class="row justify-content-center">
-    <div class="col-md-8">
-        <div class="card shadow">
-            <div class="card-body">
-                <h2 class="mb-4">Post a Problem</h2>
-                <form method="post">
+    <div class="col-12 col-lg-8 col-xl-7">
+        <div class="card form-shell">
+            <div class="card-body p-4 p-md-5">
+                <h1 class="h3 mb-3">Post a Help Request</h1>
+                <p class="text-muted">Create a clear request so other developers can pick it up quickly.</p>
+
+                <form method="post" novalidate>
                     {% csrf_token %}
-                    {{ form.as_p }}
-                    <button type="submit" class="btn btn-primary btn-lg w-100">Submit Request</button>
+
+                    <div class="mb-3">
+                        <label for="{{ form.title.id_for_label }}" class="form-label">Title</label>
+                        {{ form.title }}
+                        {% for error in form.title.errors %}
+                            <div class="text-danger small">{{ error }}</div>
+                        {% endfor %}
+                    </div>
+
+                    <div class="mb-3">
+                        <label for="{{ form.description.id_for_label }}" class="form-label">Description</label>
+                        {{ form.description }}
+                        {% for error in form.description.errors %}
+                            <div class="text-danger small">{{ error }}</div>
+                        {% endfor %}
+                    </div>
+
+                    <div class="row g-3">
+                        <div class="col-12 col-md-6">
+                            <label for="{{ form.skill_needed.id_for_label }}" class="form-label">Skill Needed</label>
+                            {{ form.skill_needed }}
+                            {% for error in form.skill_needed.errors %}
+                                <div class="text-danger small">{{ error }}</div>
+                            {% endfor %}
+                        </div>
+                        <div class="col-12 col-md-6">
+                            <label for="{{ form.kp_bounty.id_for_label }}" class="form-label">Bounty (KP)</label>
+                            {{ form.kp_bounty }}
+                            {% for error in form.kp_bounty.errors %}
+                                <div class="text-danger small">{{ error }}</div>
+                            {% endfor %}
+                        </div>
+                    </div>
+
+                    {% if form.non_field_errors %}
+                        <div class="alert alert-danger mt-3 mb-0">
+                            {% for error in form.non_field_errors %}
+                                <div>{{ error }}</div>
+                            {% endfor %}
+                        </div>
+                    {% endif %}
+
+                    <div class="d-grid mt-4">
+                        <button type="submit" class="btn btn-primary btn-lg">Submit Request</button>
+                    </div>
                 </form>
             </div>
         </div>

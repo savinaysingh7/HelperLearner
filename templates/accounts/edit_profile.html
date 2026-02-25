@@ -1,20 +1,18 @@
-{% extends 'base.html' %}
+﻿{% extends 'base.html' %}
 
 {% block title %}Edit Profile | HelperLearner{% endblock %}
 
 {% block content %}
 <div class="row justify-content-center">
-    <div class="col-md-6">
-        <div class="card shadow-sm">
-            <div class="card-header bg-primary text-white">
-                <h4 class="mb-0">Edit Your Profile</h4>
-            </div>
-            <div class="card-body">
-                <form method="post">
+    <div class="col-12 col-md-8 col-lg-6">
+        <div class="card form-shell">
+            <div class="card-body p-4">
+                <h1 class="h4 mb-3">Edit Profile</h1>
+                <form method="post" novalidate>
                     {% csrf_token %}
                     {% for field in form %}
                         <div class="mb-3">
-                            <label class="form-label">{{ field.label }}</label>
+                            <label for="{{ field.id_for_label }}" class="form-label">{{ field.label }}</label>
                             {{ field }}
                             {% if field.help_text %}
                                 <div class="form-text">{{ field.help_text }}</div>
@@ -24,7 +22,7 @@
                             {% endfor %}
                         </div>
                     {% endfor %}
-                    <div class="d-grid gap-2">
+                    <div class="d-flex gap-2 flex-column flex-sm-row">
                         <button type="submit" class="btn btn-success">Save Changes</button>
                         <a href="{% url 'profile' %}" class="btn btn-outline-secondary">Cancel</a>
                     </div>

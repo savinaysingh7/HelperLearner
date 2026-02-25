@@ -1,14 +1,22 @@
-{% extends 'base.html' %}
+﻿{% extends 'base.html' %}
+
+{% block title %}Resolve Request | HelperLearner{% endblock %}
+
 {% block content %}
-<div class="card shadow-sm mx-auto mt-5" style="max-width: 500px;">
-    <div class="card-body text-center">
-        <h4 class="mb-3">Resolve Request?</h4>
-        <p class="text-muted">Are you sure you want to mark <strong>{{ req.title }}</strong> as resolved? This will transfer {{ req.kp_bounty }} KP to <strong>{{ req.accepted_by.username }}</strong>.</p>
-        <form method="post">
-            {% csrf_token %}
-            <button type="submit" class="btn btn-success me-2">Yes, Resolve It</button>
-            <a href="{% url 'request_detail' req.pk %}" class="btn btn-secondary">Go Back</a>
-        </form>
+<div class="row justify-content-center">
+    <div class="col-12 col-md-8 col-lg-6">
+        <div class="card text-center">
+            <div class="card-body p-4">
+                <div class="display-6 text-success mb-3"><i class="bi bi-check2-circle"></i></div>
+                <h1 class="h4 mb-3">Resolve this request?</h1>
+                <p class="text-muted">Marking <strong>{{ req.title }}</strong> as resolved will transfer <strong>{{ req.kp_bounty }} KP</strong> to <strong>{{ req.accepted_by.username }}</strong>.</p>
+                <form method="post" class="d-flex flex-column flex-sm-row gap-2 justify-content-center mt-4">
+                    {% csrf_token %}
+                    <button type="submit" class="btn btn-success">Yes, resolve</button>
+                    <a href="{% url 'request_detail' req.pk %}" class="btn btn-outline-secondary">Go back</a>
+                </form>
+            </div>
+        </div>
     </div>
 </div>
 {% endblock %}
