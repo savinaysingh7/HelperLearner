@@ -64,6 +64,19 @@
             </h1>
             <span class="text-muted small">{{ page_obj.paginator.count }} result{{ page_obj.paginator.count|pluralize }}</span>
         </div>
+        {% if has_active_filters %}
+            <div class="d-flex flex-wrap gap-2 mb-3">
+                {% if current_filter_params.q %}
+                    <span class="badge text-bg-light border">Keyword: {{ current_filter_params.q }}</span>
+                {% endif %}
+                {% if current_filter_params.skill %}
+                    <span class="badge text-bg-light border">Skill filter active</span>
+                {% endif %}
+                {% if current_filter_params.tag %}
+                    <span class="badge text-bg-light border">Tag filter active</span>
+                {% endif %}
+            </div>
+        {% endif %}
 
         <div class="row g-3">
             {% for req in requests %}
