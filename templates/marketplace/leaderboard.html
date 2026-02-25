@@ -24,6 +24,7 @@
                         | Ratings: {{ hall_of_fame.ratings_count }}
                         | Helped: {{ hall_of_fame.helped_count }}
                         | Top skill: {{ hall_of_fame.top_skill }}
+                        | Trust: {{ hall_of_fame.trust_score|floatformat:1 }}/100
                     </div>
                 </div>
             </section>
@@ -70,6 +71,10 @@
                                             No ratings yet
                                         {% endif %}
                                     {% endif %}
+                                    <div class="small text-muted mt-1">Trust {{ row.trust_score|floatformat:1 }}/100</div>
+                                    <div class="progress progress-thin mt-1">
+                                        <div class="progress-bar bg-primary" style="width: {{ row.trust_score|floatformat:0 }}%"></div>
+                                    </div>
                                 </td>
                             </tr>
                         {% empty %}

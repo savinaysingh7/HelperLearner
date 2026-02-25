@@ -1,6 +1,6 @@
 ﻿from django import forms
 
-from .models import Comment, HelpRequest, Rating, Skill, Tag
+from .models import Comment, HelpRequest, Rating, SavedSearch, Skill, Tag
 
 
 class HelpRequestForm(forms.ModelForm):
@@ -117,3 +117,31 @@ class RatingForm(forms.ModelForm):
         widgets = {
             'score': forms.Select(attrs={'class': 'form-select'}),
         }
+
+
+class SavedSearchForm(forms.ModelForm):
+    """Form for creating saved discovery filters."""
+
+    class Meta:
+        model = SavedSearch
+        fields = ['query', 'skill', 'tag']
+        widgets = {
+            'query': forms.TextInput(
+                attrs={
+                    'class': 'form-control',
+                    'placeholder': 'Optional keyword',
+                }
+            ),
+            'skill': forms.Select(attrs={'class': 'form-select'}),
+            'tag': forms.Select(attrs={'class': 'form-select'}),
+        }
+
+    def clean(self):
+        cleaned_data = super().clean()
+        query = (cleaned_data.get('query') or '').strip()
+        skill = cleaned_data.get('skill')
+        tag = cleaned_data.get('tag')
+        if not query and not skill and not tag:
+            raise forms.ValidationError('Provide at least one filter (query, skill, or tag).')
+        cleaned_data['query'] = query
+        return cleaned_data

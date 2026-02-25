@@ -29,14 +29,15 @@ class HelpRequestSerializer(serializers.ModelSerializer):
 
 
 class PublicUserSerializer(serializers.ModelSerializer):
-    """Serializer for API user listing with computed average rating and skills."""
+    """Serializer for API user listing with rating, trust, KP, and skills."""
 
     avg_rating = serializers.FloatField(read_only=True)
+    trust_score = serializers.FloatField(read_only=True)
     skills = serializers.SlugRelatedField(many=True, read_only=True, slug_field='name')
 
     class Meta:
         model = CustomUser
-        fields = ['id', 'username', 'avg_rating', 'knowledge_points', 'skills']
+        fields = ['id', 'username', 'avg_rating', 'trust_score', 'knowledge_points', 'skills']
 
 
 class SkillSerializer(serializers.ModelSerializer):

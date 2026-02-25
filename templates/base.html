@@ -5,6 +5,9 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>{% block title %}HelperLearner | Developer Help{% endblock %}</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&family=Sora:wght@500;600;700&display=swap" rel="stylesheet">
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css">
     <link rel="stylesheet" href="{% static 'css/app.css' %}">
@@ -41,19 +44,25 @@
                             <a class="nav-link" href="{% url 'activity_feed' %}">Feed</a>
                         </li>
                         <li class="nav-item">
+                            <a class="nav-link" href="{% url 'saved_searches' %}">Saved Searches</a>
+                        </li>
+                        <li class="nav-item">
                             <a class="nav-link" href="{% url 'dashboard' %}">Dashboard</a>
                         </li>
                     {% endif %}
                 </ul>
-                <form class="d-flex me-lg-3 my-2 my-lg-0" role="search" action="{% url 'search' %}" method="get">
-                    <input
-                        class="form-control form-control-sm"
-                        type="search"
-                        name="q"
-                        value="{{ request.GET.q|default:'' }}"
-                        placeholder="Search requests, users, skills"
-                        aria-label="Search"
-                    >
+                <form class="nav-search me-lg-3 my-2 my-lg-0" role="search" action="{% url 'search' %}" method="get">
+                    <div class="input-group input-group-sm">
+                        <span class="input-group-text"><i class="bi bi-search"></i></span>
+                        <input
+                            class="form-control"
+                            type="search"
+                            name="q"
+                            value="{{ request.GET.q|default:'' }}"
+                            placeholder="Search requests, users, skills"
+                            aria-label="Search"
+                        >
+                    </div>
                 </form>
                 <div class="d-flex flex-column flex-lg-row align-items-lg-center gap-2">
                     {% if user.is_authenticated %}
@@ -80,7 +89,7 @@
         </div>
     </nav>
 
-    <main class="container py-4">
+    <main class="container py-4 app-main">
         {% if messages %}
             <div id="alerts-container">
                 {% for message in messages %}

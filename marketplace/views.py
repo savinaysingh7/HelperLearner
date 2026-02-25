@@ -1,13 +1,15 @@
-﻿import logging
+import logging
+from urllib.parse import urlencode
 
 import django_filters
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
 from django.core.paginator import Paginator
 from django.db import transaction
-from django.db.models import Avg, Count, OuterRef, Q, Subquery, Value
+from django.db.models import Count, OuterRef, Q, Subquery, Value
 from django.db.models.functions import Coalesce
 from django.shortcuts import get_object_or_404, redirect, render
+from django.urls import reverse
 from django.views.decorators.csrf import csrf_protect
 from django.views.decorators.http import require_POST
 from django_ratelimit.decorators import ratelimit
@@ -17,9 +19,10 @@ from rest_framework.decorators import action
 from rest_framework.response import Response
 
 from accounts.models import CustomUser
+from accounts.query_utils import annotate_user_metrics
 
-from .forms import CommentForm, HelpRequestForm, RatingForm, SearchForm
-from .models import Comment, HelpRequest, Rating, Skill, Tag
+from .forms import CommentForm, HelpRequestForm, RatingForm, SavedSearchForm, SearchForm
+from .models import Comment, HelpRequest, Rating, SavedSearch, Skill, Tag
 from .serializers import (
     HelpRequestSerializer,
     PublicCommentSerializer,
@@ -67,8 +70,7 @@ def _search_querysets(query):
     )
 
     user_results = (
-        CustomUser.objects.prefetch_related('skills')
-        .annotate(avg_rating=Avg('ratings_received__score'))
+        annotate_user_metrics(CustomUser.objects.prefetch_related('skills'))
         .filter(Q(username__icontains=normalized_query) | Q(skills__name__icontains=normalized_query))
         .distinct()
         .order_by('username')
@@ -103,17 +105,53 @@ def unified_search(request):
     return render(request, 'marketplace/search_results.html', context)
 
 
+def _saved_search_params(query, skill, tag):
+    """Build normalized query params dict for request browsing filters."""
+    params = {}
+    if query:
+        params['q'] = query
+    if skill:
+        params['skill'] = skill.pk if hasattr(skill, 'pk') else skill
+    if tag:
+        params['tag'] = tag.slug if hasattr(tag, 'slug') else tag
+    return params
+
+
+def _request_list_redirect(params):
+    """Return redirect response to request list with optional querystring params."""
+    base_url = reverse('request_list')
+    if not params:
+        return redirect('request_list')
+    return redirect(f'{base_url}?{urlencode(params)}')
+
+
+def _create_or_reactivate_saved_search(user, query, skill, tag):
+    """Create or reactivate a saved search for the same criteria."""
+    saved_search = SavedSearch.objects.filter(user=user, query=query, skill=skill, tag=tag).first()
+    if saved_search:
+        if not saved_search.is_active:
+            saved_search.is_active = True
+            saved_search.save(update_fields=['is_active'])
+        return saved_search, False
+    return SavedSearch.objects.create(user=user, query=query, skill=skill, tag=tag), True
+
+
 def request_list(request):
     """List discoverable requests with keyword, skill, and tag filters."""
     form = SearchForm(request.GET)
+    form_is_valid = form.is_valid()
     base_queryset = (
         HelpRequest.objects.select_related('skill_needed', 'user', 'accepted_by')
         .prefetch_related('tags')
         .annotate(skill_user_count=Count('skill_needed__users', distinct=True))
     )
 
+    query = ''
+    skill_filter = None
     selected_tag = None
-    if form.is_valid():
+    if form_is_valid:
+        query = (form.cleaned_data.get('q') or '').strip()
+        skill_filter = form.cleaned_data.get('skill')
         selected_tag = form.cleaned_data.get('tag')
 
     if selected_tag:
@@ -121,24 +159,25 @@ def request_list(request):
     else:
         all_requests = base_queryset.filter(status__in=['open', 'in_progress'])
 
-    if form.is_valid():
-        query = form.cleaned_data.get('q')
-        skill_filter = form.cleaned_data.get('skill')
-
-        if query:
-            all_requests = all_requests.filter(
-                Q(title__icontains=query) | Q(description__icontains=query)
-            )
-        if skill_filter:
-            all_requests = all_requests.filter(skill_needed=skill_filter)
+    if query:
+        all_requests = all_requests.filter(
+            Q(title__icontains=query) | Q(description__icontains=query)
+        )
+    if skill_filter:
+        all_requests = all_requests.filter(skill_needed=skill_filter)
 
     paginator = Paginator(all_requests.order_by('-created_at'), 10)
     page_obj = paginator.get_page(request.GET.get('page'))
+
+    current_filter_params = _saved_search_params(query, skill_filter, selected_tag)
+    has_active_filters = bool(current_filter_params)
 
     context = {
         'requests': page_obj,
         'form': form,
         'page_obj': page_obj,
+        'current_filter_params': current_filter_params,
+        'has_active_filters': has_active_filters,
     }
     return render(request, 'marketplace/request_list.html', context)
 
@@ -155,6 +194,101 @@ def tag_browse(request):
     return render(request, 'marketplace/tag_browse.html', {'tags': tags})
 
 
+@login_required
+@csrf_protect
+def saved_searches(request):
+    """Create and manage saved request filters for the authenticated user."""
+    if request.method == 'POST':
+        form = SavedSearchForm(request.POST)
+        if form.is_valid():
+            search_obj, created = _create_or_reactivate_saved_search(
+                user=request.user,
+                query=form.cleaned_data['query'],
+                skill=form.cleaned_data.get('skill'),
+                tag=form.cleaned_data.get('tag'),
+            )
+            if created:
+                messages.success(request, 'Saved search created.')
+            else:
+                messages.info(request, 'This saved search already existed and is now active.')
+            return redirect('saved_searches')
+    else:
+        initial_tag = request.GET.get('tag', '')
+        if initial_tag and not str(initial_tag).isdigit():
+            initial_tag_obj = Tag.objects.filter(slug=initial_tag).only('pk').first()
+            initial_tag = initial_tag_obj.pk if initial_tag_obj else ''
+        initial = {
+            'query': request.GET.get('q', ''),
+            'skill': request.GET.get('skill', ''),
+            'tag': initial_tag,
+        }
+        form = SavedSearchForm(initial=initial)
+
+    searches = list(request.user.saved_searches.select_related('skill', 'tag').all())
+    for search_obj in searches:
+        search_obj.query_params = _saved_search_params(search_obj.query, search_obj.skill, search_obj.tag)
+        search_obj.browse_url = f"{reverse('request_list')}?{urlencode(search_obj.query_params)}"
+
+    context = {
+        'form': form,
+        'searches': searches,
+    }
+    return render(request, 'marketplace/saved_searches.html', context)
+
+
+@login_required
+@csrf_protect
+@require_POST
+def save_current_search(request):
+    """Save the active request list filters as a reusable saved search."""
+    query = (request.POST.get('query') or '').strip()
+    skill_id = request.POST.get('skill') or ''
+    tag_slug = request.POST.get('tag') or ''
+    skill_obj = Skill.objects.filter(pk=skill_id).first() if skill_id else None
+    tag_obj = Tag.objects.filter(slug=tag_slug).first() if tag_slug else None
+    fallback_params = _saved_search_params(query, skill_obj or skill_id, tag_obj or tag_slug)
+
+    if not query and not skill_obj and not tag_obj:
+        messages.error(request, 'Could not save search. Add at least one valid filter.')
+        return _request_list_redirect(fallback_params)
+
+    _, created = _create_or_reactivate_saved_search(
+        user=request.user,
+        query=query,
+        skill=skill_obj,
+        tag=tag_obj,
+    )
+    if created:
+        messages.success(request, 'Current filters saved.')
+    else:
+        messages.info(request, 'Those filters were already saved.')
+    return _request_list_redirect(_saved_search_params(query, skill_obj, tag_obj))
+
+
+@login_required
+@csrf_protect
+@require_POST
+def toggle_saved_search(request, pk):
+    """Toggle a saved search on or off for the owner."""
+    saved_search = get_object_or_404(SavedSearch, pk=pk, user=request.user)
+    saved_search.is_active = not saved_search.is_active
+    saved_search.save(update_fields=['is_active'])
+    state = 'activated' if saved_search.is_active else 'paused'
+    messages.success(request, f'Saved search {state}.')
+    return redirect('saved_searches')
+
+
+@login_required
+@csrf_protect
+@require_POST
+def delete_saved_search(request, pk):
+    """Delete a saved search owned by the current user."""
+    saved_search = get_object_or_404(SavedSearch, pk=pk, user=request.user)
+    saved_search.delete()
+    messages.success(request, 'Saved search deleted.')
+    return redirect('saved_searches')
+
+
 def leaderboard(request):
     """Render the public leaderboard with KP, helped-count, and rating tabs."""
     resolved_skill_subquery = (
@@ -165,10 +299,7 @@ def leaderboard(request):
     )
     listed_skill_subquery = Skill.objects.filter(users=OuterRef('pk')).order_by('name').values('name')[:1]
 
-    annotated_users = CustomUser.objects.annotate(
-        helped_count=Count('accepted_tasks', filter=Q(accepted_tasks__status='resolved'), distinct=True),
-        avg_rating=Avg('ratings_received__score'),
-        ratings_count=Count('ratings_received', distinct=True),
+    annotated_users = annotate_user_metrics(CustomUser.objects.all()).annotate(
         top_skill=Coalesce(Subquery(resolved_skill_subquery), Subquery(listed_skill_subquery), Value('N/A')),
     )
 
@@ -682,10 +813,9 @@ class HelpRequestViewSet(viewsets.ReadOnlyModelViewSet):
 class UserViewSet(mixins.ListModelMixin, viewsets.GenericViewSet):
     """Browsable API endpoint for users with username, skills, KP, and average rating."""
 
-    queryset = (
-        CustomUser.objects.prefetch_related('skills')
-        .annotate(avg_rating=Avg('ratings_received__score'))
-        .order_by('-knowledge_points', 'username')
+    queryset = annotate_user_metrics(CustomUser.objects.prefetch_related('skills')).order_by(
+        '-knowledge_points',
+        'username',
     )
     serializer_class = PublicUserSerializer
 

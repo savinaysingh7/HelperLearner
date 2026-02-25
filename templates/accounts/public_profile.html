@@ -20,6 +20,9 @@
                         {% else %}
                             <div class="small text-muted">No ratings yet</div>
                         {% endif %}
+                        <div class="small mt-1">
+                            <span class="badge text-bg-primary">Trust {{ profile_user.trust_score|floatformat:1 }}/100</span>
+                        </div>
                     </div>
                 </div>
 

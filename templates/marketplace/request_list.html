@@ -6,7 +6,7 @@
 {% block content %}
 <div class="row g-4">
     <aside class="col-12 col-lg-3">
-        <div class="card form-shell h-100">
+        <div class="card form-shell filter-panel sticky-lg-top">
             <div class="card-body">
                 <h2 class="h5 mb-3">Filter Requests</h2>
                 <form method="get" action="{% url 'request_list' %}">
@@ -29,6 +29,24 @@
                         {% endif %}
                     </div>
                 </form>
+
+                {% if user.is_authenticated %}
+                    <hr>
+                    {% if has_active_filters %}
+                        <form method="post" action="{% url 'save_current_search' %}" class="d-grid gap-2">
+                            {% csrf_token %}
+                            <input type="hidden" name="query" value="{{ current_filter_params.q|default:'' }}">
+                            <input type="hidden" name="skill" value="{{ current_filter_params.skill|default:'' }}">
+                            <input type="hidden" name="tag" value="{{ current_filter_params.tag|default:'' }}">
+                            <button class="btn btn-outline-primary" type="submit">
+                                <i class="bi bi-bookmark-plus me-1"></i>Save Current Search
+                            </button>
+                            <a href="{% url 'saved_searches' %}" class="btn btn-outline-secondary">Manage Saved Searches</a>
+                        </form>
+                    {% else %}
+                        <a href="{% url 'saved_searches' %}" class="btn btn-outline-secondary w-100">Manage Saved Searches</a>
+                    {% endif %}
+                {% endif %}
             </div>
         </div>
     </aside>
@@ -50,11 +68,12 @@
         <div class="row g-3">
             {% for req in requests %}
                 <div class="col-12">
-                    <article class="card">
+                    <article class="card request-card">
                         <div class="card-body">
                             <div class="d-flex flex-column flex-md-row gap-3 justify-content-between align-items-md-center">
                                 <div>
                                     <h2 class="h5 mb-1">{{ req.title }}</h2>
+                                    <p class="small text-muted mb-1"><i class="bi bi-person-circle me-1"></i>{{ req.user.username }} · {{ req.created_at|timesince }} ago</p>
                                     <div class="d-flex flex-wrap gap-2 mb-2 align-items-center">
                                         <span class="badge text-bg-light border">{{ req.skill_needed }}</span>
                                         <span class="badge {% if req.status == 'open' %}text-bg-success{% elif req.status == 'in_progress' %}text-bg-warning{% else %}text-bg-secondary{% endif %}">{{ req.get_status_display }}</span>
