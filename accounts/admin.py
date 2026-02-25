@@ -28,6 +28,7 @@ class CustomUserAdmin(UserAdmin):
     @admin.display(description='Avg Rating')
     def avg_rating_display(self, obj):
         """Show a rounded average rating for the user when available."""
-        if obj._avg_rating is None:
+        avg_rating = getattr(obj, '_avg_rating', None)
+        if avg_rating is None:
             return '-'
-        return round(obj._avg_rating, 2)
+        return round(avg_rating, 2)

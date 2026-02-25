@@ -51,6 +51,33 @@
     </div>
 
     <div class="col-12">
+        <div class="row g-3">
+            <div class="col-12 col-md-6">
+                <div class="card h-100 border-success-subtle">
+                    <div class="card-body">
+                        <h2 class="h5">Daily Bonus</h2>
+                        {% if next_bonus_hours == 0 %}
+                            <p class="text-muted mb-3">You can claim your +10 KP bonus now.</p>
+                        {% else %}
+                            <p class="text-muted mb-3">Next bonus in {{ next_bonus_hours }} hour{{ next_bonus_hours|pluralize }}.</p>
+                        {% endif %}
+                        <a href="{% url 'claim_daily_kp' %}" class="btn btn-outline-success">Go to Daily Bonus</a>
+                    </div>
+                </div>
+            </div>
+            <div class="col-12 col-md-6">
+                <div class="card h-100 border-primary-subtle">
+                    <div class="card-body">
+                        <h2 class="h5">Transfer KP</h2>
+                        <p class="text-muted mb-3">Send KP to another user using a confirmation step.</p>
+                        <a href="{% url 'transfer_kp' %}" class="btn btn-outline-primary">Transfer KP</a>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-12">
         <div class="card">
             <div class="card-body">
                 <h2 class="h5 mb-3">Activity by Month (Last 6 Months)</h2>

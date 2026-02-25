@@ -1,0 +1,54 @@
+{% extends 'base.html' %}
+
+{% block title %}Transfer KP | HelperLearner{% endblock %}
+
+{% block content %}
+<div class="row justify-content-center g-4">
+    <div class="col-12 col-lg-7">
+        <div class="card">
+            <div class="card-body p-4">
+                <h1 class="h3 mb-2">Transfer KP</h1>
+                <p class="text-muted mb-4">Send KP to another user (minimum 5 KP).</p>
+
+                {% if confirmation %}
+                    <div class="alert alert-warning">
+                        Confirm transfer of <strong>{{ amount }} KP</strong> to <strong>{{ recipient.username }}</strong>.
+                    </div>
+                    <div class="border rounded-3 p-3 mb-3">
+                        <div class="small text-muted mb-1">Recipient</div>
+                        <div class="h5 mb-1">{{ recipient.username }}</div>
+                        <div class="small text-muted mb-0">{{ recipient.bio|default:'No bio provided.' }}</div>
+                    </div>
+                    <form method="post">
+                        {% csrf_token %}
+                        <input type="hidden" name="recipient_username" value="{{ recipient.username }}">
+                        <input type="hidden" name="amount" value="{{ amount }}">
+                        <div class="d-grid gap-2">
+                            <button type="submit" class="btn btn-primary">Confirm Transfer</button>
+                            <a href="{% url 'transfer_kp' %}" class="btn btn-outline-secondary">Cancel</a>
+                        </div>
+                    </form>
+                {% else %}
+                    <form method="get" novalidate>
+                        <div class="mb-3">
+                            <label for="{{ form.recipient_username.id_for_label }}" class="form-label">Recipient Username</label>
+                            {{ form.recipient_username }}
+                            {% for error in form.recipient_username.errors %}
+                                <div class="text-danger small">{{ error }}</div>
+                            {% endfor %}
+                        </div>
+                        <div class="mb-3">
+                            <label for="{{ form.amount.id_for_label }}" class="form-label">Amount (KP)</label>
+                            {{ form.amount }}
+                            {% for error in form.amount.errors %}
+                                <div class="text-danger small">{{ error }}</div>
+                            {% endfor %}
+                        </div>
+                        <button type="submit" class="btn btn-primary w-100">Review Transfer</button>
+                    </form>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

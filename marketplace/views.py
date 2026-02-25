@@ -198,6 +198,115 @@ def leaderboard(request):
 
 
 @login_required
+def activity_feed(request):
+    """Render a personalized feed based on interactions, skills, and commented request resolutions."""
+    current_user = request.user
+
+    interacted_user_ids = set(
+        HelpRequest.objects.filter(accepted_by=current_user).values_list('user_id', flat=True)
+    )
+    interacted_user_ids.update(
+        HelpRequest.objects.filter(user=current_user, accepted_by__isnull=False).values_list('accepted_by_id', flat=True)
+    )
+    interacted_user_ids.discard(current_user.pk)
+
+    user_skill_ids = list(current_user.skills.values_list('id', flat=True))
+    commented_request_ids = list(Comment.objects.filter(user=current_user).values_list('request_id', flat=True))
+
+    interacted_posts = (
+        HelpRequest.objects.filter(user_id__in=interacted_user_ids)
+        .select_related('user', 'skill_needed')
+        .order_by('-created_at')[:100]
+    )
+
+    matching_skill_requests = (
+        HelpRequest.objects.filter(status='open', skill_needed_id__in=user_skill_ids)
+        .exclude(user=current_user)
+        .select_related('user', 'skill_needed')
+        .order_by('-created_at')[:100]
+        if user_skill_ids
+        else HelpRequest.objects.none()
+    )
+
+    recent_resolutions = (
+        HelpRequest.objects.filter(pk__in=commented_request_ids, status='resolved')
+        .select_related('user', 'accepted_by', 'skill_needed')
+        .order_by('-updated_at')[:100]
+        if commented_request_ids
+        else HelpRequest.objects.none()
+    )
+
+    feed_items = []
+    dedupe_keys = set()
+
+    for help_request in interacted_posts:
+        dedupe_key = ('interaction_post', help_request.pk)
+        if dedupe_key in dedupe_keys:
+            continue
+        dedupe_keys.add(dedupe_key)
+        feed_items.append(
+            {
+                'type': 'interaction_post',
+                'icon': 'bi-people-fill',
+                'request': help_request,
+                'timestamp': help_request.created_at,
+                'description': f"{help_request.user.username} posted a new request: {help_request.title}",
+            }
+        )
+
+    for help_request in matching_skill_requests:
+        dedupe_key = ('skill_match_open', help_request.pk)
+        if dedupe_key in dedupe_keys:
+            continue
+        dedupe_keys.add(dedupe_key)
+        feed_items.append(
+            {
+                'type': 'skill_match_open',
+                'icon': 'bi-lightning-charge-fill',
+                'request': help_request,
+                'timestamp': help_request.created_at,
+                'description': f"New open request matching your skills: {help_request.title}",
+            }
+        )
+
+    for help_request in recent_resolutions:
+        dedupe_key = ('commented_resolution', help_request.pk)
+        if dedupe_key in dedupe_keys:
+            continue
+        dedupe_keys.add(dedupe_key)
+        feed_items.append(
+            {
+                'type': 'commented_resolution',
+                'icon': 'bi-check-circle-fill',
+                'request': help_request,
+                'timestamp': help_request.updated_at,
+                'description': f"A request you commented on was resolved: {help_request.title}",
+            }
+        )
+
+    feed_items.sort(key=lambda item: item['timestamp'], reverse=True)
+    paginator = Paginator(feed_items, 20)
+    page_obj = paginator.get_page(request.GET.get('page'))
+
+    seen_request_ids = set(commented_request_ids)
+    seen_request_ids.update(HelpRequest.objects.filter(user=current_user).values_list('pk', flat=True))
+    suggested_requests = (
+        HelpRequest.objects.filter(status='open', skill_needed_id__in=user_skill_ids)
+        .exclude(pk__in=seen_request_ids)
+        .exclude(user=current_user)
+        .select_related('user', 'skill_needed')
+        .order_by('-created_at')[:3]
+    )
+
+    context = {
+        'page_obj': page_obj,
+        'feed_items': page_obj.object_list,
+        'suggested_requests': suggested_requests,
+    }
+    return render(request, 'marketplace/activity_feed.html', context)
+
+
+@login_required
 @csrf_protect
 @ratelimit(key='ip', rate='10/m', block=True)
 def create_request(request):
@@ -586,3 +695,21 @@ class SkillViewSet(mixins.ListModelMixin, viewsets.GenericViewSet):
 
     queryset = Skill.objects.annotate(request_count=Count('helprequest', distinct=True)).order_by('name')
     serializer_class = SkillSerializer
+
+
+class SearchViewSet(viewsets.ViewSet):
+    """Browsable API endpoint for grouped full-text search across requests, users, and skills."""
+
+    def list(self, request):
+        """Return grouped JSON search results for query param `q`."""
+        query = request.query_params.get('q', '').strip()
+        request_results, user_results, skill_results = _search_querysets(query)
+
+        return Response(
+            {
+                'query': query,
+                'requests': HelpRequestSerializer(request_results[:10], many=True).data if query else [],
+                'users': PublicUserSerializer(user_results[:10], many=True).data if query else [],
+                'skills': SkillSerializer(skill_results[:10], many=True).data if query else [],
+            }
+        )
