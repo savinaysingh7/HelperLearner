@@ -54,7 +54,7 @@ Production reads SMTP settings from environment variables:
 ## AI Assistant Setup (Gemini)
 Set the following environment variables:
 - `GEMINI_API_KEY`
-- `GEMINI_MODEL` (optional, defaults to `gemini-1.5-flash`)
+- `GEMINI_MODEL` (optional, defaults to `gemini-flash-latest`)
 
 The request form includes an **Improve with AI** action that calls:
 - `POST /post/assist/`

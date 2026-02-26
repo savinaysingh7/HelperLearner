@@ -8,6 +8,33 @@ from django.utils.text import slugify
 logger = logging.getLogger(__name__)
 
 
+def _normalize_model_name(model_name):
+    """Return a bare model id without the `models/` prefix."""
+    normalized = (model_name or "").strip()
+    if normalized.startswith("models/"):
+        return normalized.split("/", 1)[1]
+    return normalized
+
+
+def _candidate_models():
+    """Return ordered model candidates for resilient Gemini calls."""
+    configured = _normalize_model_name(getattr(settings, "GEMINI_MODEL", ""))
+    fallbacks = [
+        "gemini-flash-latest",
+        "gemini-2.0-flash",
+        "gemini-2.5-flash",
+    ]
+    ordered = [configured] + fallbacks
+    seen = set()
+    models = []
+    for item in ordered:
+        if not item or item in seen:
+            continue
+        seen.add(item)
+        models.append(item)
+    return models
+
+
 def _strip_code_fences(raw_text):
     """Remove markdown JSON fences from model output when present."""
     text = (raw_text or "").strip()
@@ -79,9 +106,6 @@ def generate_request_assistance(title, description, available_skills):
     if not api_key:
         raise RuntimeError("AI assistant is not configured. Set GEMINI_API_KEY in environment settings.")
 
-    model_name = (getattr(settings, "GEMINI_MODEL", "gemini-1.5-flash") or "gemini-1.5-flash").strip()
-    endpoint = f"https://generativelanguage.googleapis.com/v1beta/models/{model_name}:generateContent?key={api_key}"
-
     payload = {
         "contents": [
             {
@@ -95,23 +119,37 @@ def generate_request_assistance(title, description, available_skills):
         },
     }
 
-    req = request.Request(
-        endpoint,
-        data=json.dumps(payload).encode("utf-8"),
-        headers={"Content-Type": "application/json"},
-        method="POST",
-    )
+    response_data = None
+    last_exception = None
+    tried_models = _candidate_models()
+    for model_name in tried_models:
+        endpoint = f"https://generativelanguage.googleapis.com/v1beta/models/{model_name}:generateContent?key={api_key}"
+        req = request.Request(
+            endpoint,
+            data=json.dumps(payload).encode("utf-8"),
+            headers={"Content-Type": "application/json"},
+            method="POST",
+        )
+        try:
+            with request.urlopen(req, timeout=20) as response:
+                body = response.read().decode("utf-8")
+                response_data = json.loads(body)
+                break
+        except error.HTTPError as exc:
+            last_exception = exc
+            if exc.code in {404, 429}:
+                logger.warning("Gemini model candidate failed (status=%s): %s", exc.code, model_name)
+                continue
+            logger.warning("Gemini request failed with status=%s model=%s", exc.code, model_name)
+            raise RuntimeError("AI assistant is temporarily unavailable. Please try again.") from exc
+        except Exception as exc:
+            last_exception = exc
+            logger.exception("Gemini request failed unexpectedly for model=%s", model_name)
+            raise RuntimeError("AI assistant is temporarily unavailable. Please try again.") from exc
 
-    try:
-        with request.urlopen(req, timeout=20) as response:
-            body = response.read().decode("utf-8")
-            response_data = json.loads(body)
-    except error.HTTPError as exc:
-        logger.warning("Gemini request failed with status=%s", exc.code)
-        raise RuntimeError("AI assistant is temporarily unavailable. Please try again.") from exc
-    except Exception as exc:
-        logger.exception("Gemini request failed unexpectedly")
-        raise RuntimeError("AI assistant is temporarily unavailable. Please try again.") from exc
+    if response_data is None:
+        logger.warning("No compatible Gemini model found for candidates=%s", tried_models)
+        raise RuntimeError("AI assistant model is unavailable. Update GEMINI_MODEL to an enabled model.") from last_exception
 
     try:
         raw_text = response_data["candidates"][0]["content"]["parts"][0]["text"]
