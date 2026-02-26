@@ -19,6 +19,24 @@
 
         <div class="card form-shell">
             <div class="card-body p-4 p-md-5">
+                <div class="alert alert-info d-flex flex-column flex-md-row justify-content-between align-items-md-center gap-3" role="status">
+                    <div>
+                        <div class="fw-semibold"><i class="bi bi-stars me-1"></i>AI Draft Assistant</div>
+                        <div class="small mb-0">
+                            Improve title, description, tags, and skill suggestions in one click.
+                        </div>
+                    </div>
+                    <button
+                        type="button"
+                        id="aiAssistButton"
+                        class="btn btn-outline-primary btn-sm"
+                        data-assist-url="{% url 'ai_request_assist' %}"
+                    >
+                        Improve with AI
+                    </button>
+                </div>
+                <div id="aiAssistFeedback" class="small text-muted mb-3" aria-live="polite"></div>
+
                 <form method="post" novalidate>
                     {% csrf_token %}
 
@@ -85,4 +103,98 @@
         </div>
     </div>
 </div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    document.addEventListener("DOMContentLoaded", function () {
+        var button = document.getElementById("aiAssistButton");
+        var feedback = document.getElementById("aiAssistFeedback");
+        if (!button || !feedback) {
+            return;
+        }
+
+        var titleField = document.getElementById("{{ form.title.id_for_label }}");
+        var descriptionField = document.getElementById("{{ form.description.id_for_label }}");
+        var tagsField = document.getElementById("{{ form.tags_input.id_for_label }}");
+        var skillField = document.getElementById("{{ form.skill_needed.id_for_label }}");
+        var csrfInput = document.querySelector('input[name="csrfmiddlewaretoken"]');
+
+        function setFeedback(text, typeClass) {
+            feedback.className = "small mb-3 " + typeClass;
+            feedback.textContent = text;
+        }
+
+        button.addEventListener("click", function () {
+            var title = titleField ? titleField.value.trim() : "";
+            var description = descriptionField ? descriptionField.value.trim() : "";
+            if (title.length < 3 && description.length < 10) {
+                setFeedback("Add a clearer title or description first.", "text-danger");
+                return;
+            }
+            if (!csrfInput) {
+                setFeedback("Missing CSRF token. Refresh and try again.", "text-danger");
+                return;
+            }
+
+            button.disabled = true;
+            var oldLabel = button.innerHTML;
+            button.innerHTML = '<span class="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true"></span>Thinking...';
+            setFeedback("Generating suggestions...", "text-muted");
+
+            fetch(button.dataset.assistUrl, {
+                method: "POST",
+                headers: {
+                    "Content-Type": "application/json",
+                    "X-CSRFToken": csrfInput.value
+                },
+                body: JSON.stringify({
+                    title: title,
+                    description: description
+                })
+            })
+            .then(function (response) {
+                return response.json().then(function (data) {
+                    return { ok: response.ok, data: data };
+                });
+            })
+            .then(function (result) {
+                if (!result.ok || !result.data.ok) {
+                    var message = (result.data && result.data.error) ? result.data.error : "AI assist failed.";
+                    setFeedback(message, "text-danger");
+                    return;
+                }
+
+                var suggestion = result.data.suggestion || {};
+                if (titleField && suggestion.improved_title) {
+                    titleField.value = suggestion.improved_title;
+                }
+                if (descriptionField && suggestion.improved_description) {
+                    descriptionField.value = suggestion.improved_description;
+                }
+                if (tagsField && suggestion.suggested_tags && suggestion.suggested_tags.length) {
+                    tagsField.value = suggestion.suggested_tags.join(", ");
+                }
+                if (skillField && suggestion.suggested_skill) {
+                    var targetSkill = suggestion.suggested_skill.toLowerCase();
+                    Array.from(skillField.options).forEach(function (option) {
+                        if (option.text.trim().toLowerCase() === targetSkill) {
+                            skillField.value = option.value;
+                        }
+                    });
+                }
+
+                var summary = suggestion.reasoning_summary ? (" " + suggestion.reasoning_summary) : "";
+                setFeedback("Draft improved successfully." + summary, "text-success");
+            })
+            .catch(function () {
+                setFeedback("Network error while contacting AI assistant.", "text-danger");
+            })
+            .finally(function () {
+                button.disabled = false;
+                button.innerHTML = oldLabel;
+            });
+        });
+    });
+</script>
 {% endblock %}

@@ -1,3 +1,4 @@
+import json
 import logging
 from urllib.parse import urlencode
 
@@ -8,6 +9,7 @@ from django.core.paginator import Paginator
 from django.db import transaction
 from django.db.models import Count, F, OuterRef, Q, Subquery, Value
 from django.db.models.functions import Coalesce
+from django.http import JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
 from django.views.decorators.csrf import csrf_protect
@@ -21,6 +23,7 @@ from rest_framework.response import Response
 from accounts.models import CustomUser
 from accounts.query_utils import annotate_user_metrics
 
+from .ai_assistant import generate_request_assistance
 from .forms import CommentForm, HelpRequestForm, RatingForm, SavedSearchForm, SearchForm
 from .models import Comment, HelpRequest, Rating, SavedSearch, Skill, Tag
 from .serializers import (
@@ -466,6 +469,35 @@ def create_request(request):
         form = HelpRequestForm()
 
     return render(request, 'marketplace/create_request.html', {'form': form, 'is_edit': False})
+
+
+@login_required
+@csrf_protect
+@require_POST
+@ratelimit(key='ip', rate='15/m', block=True)
+def ai_request_assist(request):
+    """Generate AI-assisted improvements for a help-request draft via Gemini."""
+    try:
+        payload = json.loads((request.body or b'{}').decode('utf-8'))
+    except (TypeError, ValueError, UnicodeDecodeError):
+        return JsonResponse({'ok': False, 'error': 'Invalid JSON payload.'}, status=400)
+
+    title = str(payload.get('title') or '').strip()
+    description = str(payload.get('description') or '').strip()
+    if len(title) < 3 and len(description) < 10:
+        return JsonResponse(
+            {'ok': False, 'error': 'Please add a clearer title or description before using AI assist.'},
+            status=400,
+        )
+
+    available_skills = list(Skill.objects.order_by('name').values_list('name', flat=True))
+    try:
+        suggestion = generate_request_assistance(title, description, available_skills)
+    except RuntimeError as exc:
+        logger.warning('AI request assist unavailable for user=%s: %s', request.user.username, exc)
+        return JsonResponse({'ok': False, 'error': str(exc)}, status=503)
+
+    return JsonResponse({'ok': True, 'suggestion': suggestion})
 
 
 @login_required

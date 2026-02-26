@@ -13,6 +13,7 @@ HelperLearner is a Django 6 knowledge marketplace where users post help requests
 - Unified full-text search across requests/users/skills with highlighting.
 - Personalized user activity feed and KP claim/transfer actions.
 - Saved searches with notification automation for new matching requests.
+- AI draft assistant for request posting/editing (Gemini-powered title/description/tag/skill suggestions).
 - Trust score metrics surfaced on profiles, leaderboard, and user API.
 - DRF read-only API with pagination, filtering, and grouped search.
 - Custom Django admin dashboards/actions for all models.
@@ -49,6 +50,14 @@ Production reads SMTP settings from environment variables:
 - `EMAIL_HOST_PASSWORD`
 - `EMAIL_USE_TLS` (optional, defaults to `True`)
 - `DEFAULT_FROM_EMAIL` (optional, defaults to `no-reply@helperlearner.local`)
+
+## AI Assistant Setup (Gemini)
+Set the following environment variables:
+- `GEMINI_API_KEY`
+- `GEMINI_MODEL` (optional, defaults to `gemini-1.5-flash`)
+
+The request form includes an **Improve with AI** action that calls:
+- `POST /post/assist/`
 
 ## Production Configuration
 Use `helperlearner_root.settings.prod` with explicit secure environment variables.
@@ -97,6 +106,7 @@ python manage.py notify_saved_searches
 - `GET,POST /kp/claim-daily/` daily +10 KP claim (24-hour cooldown)
 - `GET,POST /kp/transfer/` confirmed KP transfer flow
 - `GET,POST /accounts/profile/edit/` includes notification preference management
+- `POST /post/assist/` AI draft improvement endpoint (login + CSRF required)
 
 ## API Endpoints
 All endpoints are paginated (`page_size=10`).
