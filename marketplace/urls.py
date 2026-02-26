@@ -17,6 +17,7 @@ urlpatterns = [
     path('saved-searches/save-current/', views.save_current_search, name='save_current_search'),
     path('saved-searches/<int:pk>/toggle/', views.toggle_saved_search, name='toggle_saved_search'),
     path('saved-searches/<int:pk>/delete/', views.delete_saved_search, name='delete_saved_search'),
+    path('post/assist/', views.ai_request_assist, name='ai_request_assist'),
     path('post/', views.create_request, name='create_request'),
     path('request/<int:pk>/', views.request_detail, name='request_detail'),
     path('request/<int:pk>/edit/', views.edit_request, name='edit_request'),
