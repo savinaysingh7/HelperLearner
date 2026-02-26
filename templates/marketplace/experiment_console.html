@@ -1,0 +1,45 @@
+{% extends 'base.html' %}
+
+{% block title %}Experiments Console{% endblock %}
+
+{% block content %}
+<section class="page-head">
+    <span class="eyebrow"><i class="bi bi-bezier2"></i>A/B Framework</span>
+    <h1 class="h3">Experiment Console</h1>
+    <p class="text-muted mb-0">Create and monitor UI/matching experiments.</p>
+</section>
+
+<div class="card mb-3">
+    <div class="card-header fw-semibold">Create Experiment</div>
+    <div class="card-body">
+        <form method="post" class="row g-2">
+            {% csrf_token %}
+            <div class="col-12 col-md-3"><input class="form-control" name="name" placeholder="Name"></div>
+            <div class="col-12 col-md-3"><input class="form-control" name="slug" placeholder="slug"></div>
+            <div class="col-12 col-md-2"><input class="form-control" name="variant_a" value="control"></div>
+            <div class="col-12 col-md-2"><input class="form-control" name="variant_b" value="treatment"></div>
+            <div class="col-12 col-md-2"><button class="btn btn-primary w-100" type="submit">Create</button></div>
+        </form>
+    </div>
+</div>
+
+<div class="card">
+    <div class="card-header fw-semibold">Existing Experiments</div>
+    <ul class="list-group list-group-flush">
+        {% for experiment in experiments %}
+            <li class="list-group-item">
+                <div class="fw-semibold">{{ experiment.name }} <span class="badge {% if experiment.is_active %}text-bg-success{% else %}text-bg-secondary{% endif %}">{{ experiment.slug }}</span></div>
+                <div class="small text-muted">Variants:
+                    {% for variant in experiment.variants.all %}
+                        {{ variant.key }} ({{ variant.weight }}){% if not forloop.last %}, {% endif %}
+                    {% empty %}
+                        none
+                    {% endfor %}
+                </div>
+            </li>
+        {% empty %}
+            <li class="list-group-item text-muted">No experiments yet.</li>
+        {% endfor %}
+    </ul>
+</div>
+{% endblock %}

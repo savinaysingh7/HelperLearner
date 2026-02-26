@@ -9,6 +9,7 @@ from django.urls import reverse
 from django.utils.html import strip_tags
 
 from marketplace.models import HelpRequest
+from marketplace.realtime import emit_user_event
 
 from .models import Notification
 from .utils import allows_email, allows_in_app
@@ -107,3 +108,19 @@ def create_help_request_notifications(sender, instance, created, **kwargs):
                 context={'request_obj': instance, 'poster': instance.user, 'helper': instance.accepted_by},
                 recipient_email=instance.accepted_by.email,
             )
+
+
+@receiver(post_save, sender=Notification)
+def push_realtime_notification(sender, instance, created, **kwargs):
+    """Forward in-app notifications to websocket clients for realtime UX."""
+    if not created:
+        return
+    emit_user_event(
+        instance.user_id,
+        'notification.created',
+        {
+            'notification_id': instance.pk,
+            'message': instance.message,
+            'link': instance.link,
+        },
+    )

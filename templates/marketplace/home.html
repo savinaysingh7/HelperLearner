@@ -117,7 +117,7 @@
                             {% endfor %}
                         </div>
                         <div class="d-flex justify-content-between align-items-center">
-                            <span class="fw-semibold text-success">₹{{ job.budget_inr }}</span>
+                            <span class="fw-semibold text-success">&#8377;{{ job.budget_inr }}</span>
                             <a href="{% url 'freelance_job_detail' job.pk %}" class="btn btn-link ps-0">Open details <i class="bi bi-arrow-right"></i></a>
                         </div>
                     </div>
@@ -136,3 +136,4 @@
     </div>
 </section>
 {% endblock %}
+

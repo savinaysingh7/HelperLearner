@@ -37,6 +37,8 @@ MIDDLEWARE = [
     "django.middleware.common.CommonMiddleware",
     "django.middleware.csrf.CsrfViewMiddleware",
     "django.contrib.auth.middleware.AuthenticationMiddleware",
+    "helperlearner_root.middleware.ExperimentAssignmentMiddleware",
+    "helperlearner_root.middleware.SuspensionEnforcementMiddleware",
     "axes.middleware.AxesMiddleware",
     "django.contrib.messages.middleware.MessageMiddleware",
     "django.middleware.clickjacking.XFrameOptionsMiddleware",
@@ -55,12 +57,30 @@ TEMPLATES = [
                 "django.contrib.auth.context_processors.auth",
                 "django.contrib.messages.context_processors.messages",
                 "notifications.context_processors.unread_notifications_count",
+                "marketplace.context_processors.active_experiments",
             ],
         },
     },
 ]
 
 WSGI_APPLICATION = "helperlearner_root.wsgi.application"
+
+try:  # pragma: no cover - optional dependency
+    import channels  # noqa: F401
+
+    HAS_CHANNELS = True
+    INSTALLED_APPS.append("channels")
+    ASGI_APPLICATION = "helperlearner_root.asgi.application"
+except Exception:
+    HAS_CHANNELS = False
+    ASGI_APPLICATION = "helperlearner_root.asgi.application"
+
+if HAS_CHANNELS:
+    CHANNEL_LAYERS = {
+        "default": {
+            "BACKEND": "channels.layers.InMemoryChannelLayer",
+        }
+    }
 
 DATABASES = {
     "default": dj_database_url.config(
@@ -97,6 +117,11 @@ REST_FRAMEWORK = {
     "DEFAULT_PAGINATION_CLASS": "rest_framework.pagination.PageNumberPagination",
     "PAGE_SIZE": 10,
     "DEFAULT_FILTER_BACKENDS": ["django_filters.rest_framework.DjangoFilterBackend"],
+    "DEFAULT_AUTHENTICATION_CLASSES": [
+        "rest_framework.authentication.SessionAuthentication",
+        "rest_framework.authentication.BasicAuthentication",
+        "marketplace.api_auth.ApiKeyAuthentication",
+    ],
 }
 
 LANGUAGE_CODE = "en-us"
@@ -108,6 +133,8 @@ STATIC_URL = "/static/"
 STATIC_ROOT = BASE_DIR / "staticfiles"
 STATICFILES_DIRS = [BASE_DIR / "static"]
 STATICFILES_STORAGE = "whitenoise.storage.CompressedManifestStaticFilesStorage"
+MEDIA_URL = "/media/"
+MEDIA_ROOT = BASE_DIR / "media"
 
 AUTH_USER_MODEL = "accounts.CustomUser"
 LOGIN_REDIRECT_URL = "home"

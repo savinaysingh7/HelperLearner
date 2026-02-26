@@ -1,0 +1,9 @@
+{
+  "name": "HelperLearner",
+  "short_name": "HelperLearner",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#070d18",
+  "theme_color": "#53d1bb",
+  "description": "Knowledge marketplace for KP and paid freelance help."
+}

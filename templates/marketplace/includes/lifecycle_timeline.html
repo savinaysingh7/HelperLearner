@@ -1,0 +1,24 @@
+<section class="card mb-3 lifecycle-shell">
+    <div class="card-body">
+        <div class="d-flex justify-content-between align-items-center mb-3">
+            <h2 class="h6 mb-0">{{ title|default:'Lifecycle' }}</h2>
+            <span class="small text-muted">Escrow lifecycle tracking</span>
+        </div>
+        <ol class="lifecycle-timeline list-unstyled mb-0">
+            {% for step in steps %}
+                <li class="timeline-step state-{{ step.state }}">
+                    <div class="timeline-dot">
+                        <i class="bi {{ step.icon }}"></i>
+                    </div>
+                    <div class="timeline-content">
+                        <div class="fw-semibold">{{ step.label }}</div>
+                        <div class="small text-muted">{{ step.detail }}</div>
+                        {% if step.timestamp %}
+                            <div class="small text-muted">{{ step.timestamp|date:'M d, Y H:i' }}</div>
+                        {% endif %}
+                    </div>
+                </li>
+            {% endfor %}
+        </ol>
+    </div>
+</section>

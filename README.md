@@ -16,7 +16,23 @@ HelperLearner is a Django 6 knowledge marketplace where users post help requests
 - AI draft assistant for request posting/editing (Gemini-powered title/description/tag/skill suggestions).
 - Trust score metrics surfaced on profiles, leaderboard, and user API.
 - Dual marketplace model: KP help requests + INR paid freelance jobs.
+- Proposal-first hiring flow for both KP requests and paid INR jobs.
+- Side-by-side proposal comparison pages with bid, ETA, rating, and completion metrics.
+- Freelancer proposal milestones that auto-convert to real job milestones on selection.
+- Deliverables + revision workflow for milestones (proof upload, revision requests, approvals).
 - Milestone-based INR escrow release, disputes, wallet ledger, and payout requests.
+- SLA engine for response reminders and optional milestone auto-release.
+- Visual lifecycle timelines on request/job detail pages for escrow state transparency.
+- User-selectable UI density mode (`comfortable` or `compact`) persisted in profile settings.
+- Trust Score v2 breakdown (on-time %, dispute %, response time, streak).
+- Risk/fraud checks for collusion and KP transfer velocity/patterns.
+- Team workspaces with shared wallet and role permissions.
+- Generic attachment uploads for requests, jobs, and comments.
+- API keys + webhook delivery logs for external integrations.
+- Moderation console with report queue, fraud alerts, and account suspension actions.
+- PWA support (manifest + service worker) and realtime websocket notification hooks.
+- Advanced analytics dashboard and lightweight A/B experimentation framework.
+- CSV export for wallet ledger and personal dispute history.
 - DRF read-only API with pagination, filtering, and grouped search.
 - Custom Django admin dashboards/actions for all models.
 
@@ -100,25 +116,51 @@ Notify users about newly created open requests that match active saved searches:
 python manage.py notify_saved_searches
 ```
 
+## SLA Engine Command
+Run SLA reminders and milestone auto-release rules:
+```bash
+python manage.py run_sla_engine
+```
+
 ## Web Endpoints
 - `GET /healthz/` lightweight health check endpoint for uptime probes
 - `GET /search/?q=` unified search page for requests/users/skills
 - `GET /feed/` personalized activity feed (login required)
 - `GET,POST /saved-searches/` create/manage saved request filters
+- `GET /recommendations/` personalized ranked opportunities
+- `GET,POST /workspaces/` create and browse team workspaces
+- `GET /workspaces/<slug>/` workspace members + shared wallet ledger
 - `GET,POST /kp/claim-daily/` daily +10 KP claim (24-hour cooldown)
 - `GET,POST /kp/transfer/` confirmed KP transfer flow
 - `GET,POST /accounts/profile/edit/` includes notification preference management
+- `GET,POST /portfolio/` manage public helper portfolio
+- `GET,POST /integrations/` API key + webhook management
+- `GET /moderation/` moderation queue (staff)
+- `GET /analytics/advanced/` analytics dashboard (staff)
 - `POST /post/assist/` AI draft improvement endpoint (login + CSRF required)
 - `GET /jobs/` paid freelance jobs discovery
 - `GET,POST /jobs/post/` create paid freelance job and fund escrow
 - `GET /jobs/<id>/` paid job detail with milestones
+- `GET /jobs/<id>/proposals/compare/` side-by-side proposal comparison
+- `GET /request/<id>/proposals/compare/` side-by-side proposal comparison
+- `POST /request/<id>/propose/` submit or update helper proposal
+- `POST /request/<id>/proposals/<proposal_id>/select/` select a helper proposal
+- `POST /request/<id>/proposals/withdraw/` withdraw own helper proposal
+- `POST /jobs/<id>/propose/` submit or update freelancer proposal
+- `POST /jobs/<id>/proposals/<proposal_id>/select/` select a freelancer proposal
+- `POST /jobs/<id>/proposals/withdraw/` withdraw own freelancer proposal
 - `POST /jobs/<id>/claim/` accept paid job as freelancer
 - `POST /jobs/<id>/milestones/add/` add milestone (client)
 - `POST /jobs/<id>/milestones/<mid>/submit/` submit milestone (freelancer)
+- `POST /jobs/<id>/milestones/<mid>/deliverable/` submit proof deliverable
+- `POST /jobs/<id>/milestones/<mid>/revision/` request milestone changes (client)
+- `POST /jobs/<id>/milestones/<mid>/approve/` approve deliverable before release
 - `POST /jobs/<id>/milestones/<mid>/release/` release milestone payment (client)
 - `GET,POST /jobs/<id>/cancel/` cancel paid job and refund escrow
 - `POST /jobs/<id>/dispute/` open paid-job dispute
 - `GET,POST /wallet/` INR wallet and payout request page
+- `GET /wallet/export/` export wallet ledger as CSV
+- `GET /jobs/disputes/export/` export your job disputes as CSV
 
 ## API Endpoints
 All endpoints are paginated (`page_size=10`).
@@ -131,10 +173,25 @@ All endpoints are paginated (`page_size=10`).
 - `GET /api/skills/` (skill + request_count)
 - `GET /api/search/?q=` (grouped `requests`, `users`, `skills`)
 
+Realtime websocket endpoint (when Channels is installed):
+- `GET ws://<host>/ws/updates/`
+
 ## Testing
 Run the full test suite:
 ```bash
 python manage.py test
+```
+
+## Demo Seeding
+Replace demo/seeded data with realistic Indian marketplace activity:
+```bash
+python manage.py seed_indian_demo_data
+```
+
+Optional:
+```bash
+python manage.py seed_indian_demo_data --password "YourDemoPass123!"
+python manage.py seed_indian_demo_data --drop-superusers
 ```
 
 ## Product Roadmap Ideas

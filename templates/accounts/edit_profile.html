@@ -45,6 +45,19 @@
                         {% endfor %}
                     </div>
 
+                    <div class="mb-3">
+                        <label for="{{ form.ui_density.id_for_label }}" class="form-label">
+                            Interface Density
+                        </label>
+                        {{ form.ui_density }}
+                        <div class="form-text">
+                            Comfortable adds spacing. Compact reduces card and table density.
+                        </div>
+                        {% for error in form.ui_density.errors %}
+                            <div class="text-danger small">{{ error }}</div>
+                        {% endfor %}
+                    </div>
+
                     <div class="mb-3 profile-skill-grid">
                         <label class="form-label d-block">Skills</label>
                         <div class="row g-2">

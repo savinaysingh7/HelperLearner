@@ -5,17 +5,29 @@ from django.contrib import messages
 from django.contrib.auth import login
 from django.contrib.auth.decorators import login_required
 from django.db import transaction
-from django.db.models import Avg, Count, Sum, Value
+from django.db.models import Avg, Count, Q, Sum, Value
 from django.db.models.functions import Coalesce, TruncMonth
 from django.shortcuts import get_object_or_404, redirect, render
 from django.utils import timezone
 from django.views.decorators.csrf import csrf_protect
 
-from marketplace.models import FreelanceJob, HelpRequest
+from marketplace.models import (
+    FreelanceJob,
+    FreelanceJobProposal,
+    HelpRequest,
+    HelpRequestProposal,
+    JobDispute,
+    JobMilestone,
+    KPTransfer,
+)
+from marketplace.realtime import emit_user_event
+from marketplace.risk import evaluate_kp_transfer_risk
+from notifications.models import Notification
 
 from .forms import DeveloperSignUpForm, KPTransferLookupForm, UserUpdateForm
 from .models import CustomUser
 from .query_utils import annotate_user_metrics
+from .trust import compute_trust_score_v2
 
 
 def _profile_queryset():
@@ -65,10 +77,12 @@ def signup(request):
 def profile(request):
     """Render the authenticated user's profile with tasks, ratings, and listed skills."""
     profile_user = get_object_or_404(_profile_queryset(), pk=request.user.pk)
+    trust_v2 = compute_trust_score_v2(profile_user)
     context = {
         'profile_user': profile_user,
         'my_posts': HelpRequest.objects.filter(user=request.user).order_by('-created_at'),
         'my_tasks': HelpRequest.objects.filter(accepted_by=request.user).order_by('-created_at'),
+        'trust_v2': trust_v2,
     }
     return render(request, 'accounts/profile.html', context)
 
@@ -76,10 +90,13 @@ def profile(request):
 def public_profile(request, username):
     """Render the public profile view for a user including skills and rating summary."""
     profile_user = get_object_or_404(_profile_queryset(), username=username)
+    trust_v2 = compute_trust_score_v2(profile_user)
     context = {
         'profile_user': profile_user,
         'posted_count': HelpRequest.objects.filter(user=profile_user).count(),
         'helped_count': HelpRequest.objects.filter(accepted_by=profile_user, status='resolved').count(),
+        'trust_v2': trust_v2,
+        'portfolio_items': profile_user.portfolio_items.select_related('primary_skill').all()[:6],
     }
     return render(request, 'accounts/public_profile.html', context)
 
@@ -116,6 +133,34 @@ def dashboard(request):
     success_rate = round((resolved_posted_count / requests_posted_count) * 100, 2) if requests_posted_count else 0
 
     average_rating_received = request.user.ratings_received.aggregate(avg=Avg('score'))['avg']
+    pending_request_proposals = HelpRequestProposal.objects.filter(
+        request__user=request.user,
+        request__status='open',
+        status='pending',
+    ).count()
+    pending_job_proposals = FreelanceJobProposal.objects.filter(
+        job__client=request.user,
+        job__status='open',
+        status='pending',
+    ).count()
+    pending_milestone_reviews = JobMilestone.objects.filter(
+        job__client=request.user,
+        job__status='in_progress',
+        status='submitted',
+    ).count()
+    open_disputes = JobDispute.objects.filter(
+        status='open',
+    ).filter(
+        Q(job__client=request.user) | Q(job__freelancer=request.user)
+    ).count()
+    unread_notifications = Notification.objects.filter(user=request.user, is_read=False).count()
+    action_required_total = (
+        pending_request_proposals
+        + pending_job_proposals
+        + pending_milestone_reviews
+        + open_disputes
+        + unread_notifications
+    )
     paid_jobs_posted = FreelanceJob.objects.filter(client=request.user).count()
     paid_jobs_completed = FreelanceJob.objects.filter(client=request.user, status='completed').count()
     paid_jobs_taken = FreelanceJob.objects.filter(freelancer=request.user).count()
@@ -123,6 +168,7 @@ def dashboard(request):
         request.user.wallet_entries.filter(direction='credit', source_type='job_milestone_release')
         .aggregate(total=Coalesce(Sum('amount_inr'), Value(Decimal('0.00'))))['total']
     )
+    trust_v2 = compute_trust_score_v2(request.user)
 
     now = timezone.now()
     first_month = _month_start(now, 5)
@@ -178,6 +224,15 @@ def dashboard(request):
         'paid_income': paid_income,
         'monthly_activity': monthly_activity,
         'next_bonus_hours': _next_bonus_hours(request.user, now),
+        'action_required_total': action_required_total,
+        'action_required_breakdown': {
+            'request_proposals': pending_request_proposals,
+            'job_proposals': pending_job_proposals,
+            'milestone_reviews': pending_milestone_reviews,
+            'open_disputes': open_disputes,
+            'unread_notifications': unread_notifications,
+        },
+        'trust_v2': trust_v2,
     }
     return render(request, 'accounts/dashboard.html', context)
 
@@ -249,7 +304,19 @@ def transfer_kp(request):
             receiver.knowledge_points += amount
             sender.save(update_fields=['knowledge_points'])
             receiver.save(update_fields=['knowledge_points'])
+            KPTransfer.objects.create(sender=sender, recipient=receiver, amount=amount)
 
+        evaluate_kp_transfer_risk(sender, receiver, amount)
+        Notification.objects.create(
+            user=receiver,
+            message=f'You received {amount} KP from {sender.username}.',
+            link='/accounts/dashboard/',
+        )
+        emit_user_event(
+            receiver.pk,
+            'kp.received',
+            {'from': sender.username, 'amount': amount},
+        )
         messages.success(request, f'Successfully transferred {amount} KP to {receiver.username}.')
         return redirect('dashboard')
 

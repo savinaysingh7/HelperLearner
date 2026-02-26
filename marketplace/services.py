@@ -4,7 +4,8 @@ from decimal import Decimal
 from django.db import transaction
 from django.utils import timezone
 
-from .models import FreelanceJob, JobDispute, PayoutRequest, TrustSignal, WalletLedger
+from .models import FreelanceJob, FraudAlert, JobDispute, PayoutRequest, TrustSignal, WalletLedger
+from .webhooks import dispatch_webhook_event
 
 
 def record_wallet_entry(user, direction, amount_inr, source_type, reference_id=None, description=''):
@@ -48,6 +49,14 @@ def evaluate_job_collusion(job, threshold=3, window_days=30):
                 score_delta=-4,
                 detail=f'High-frequency completions between same pair in {window_days} days.',
                 related_job=job,
+            )
+            FraudAlert.objects.create(
+                user_id=user_id,
+                related_user_id=job.freelancer_id if user_id == job.client_id else job.client_id,
+                alert_type='collusion',
+                severity='high',
+                description=f'Potential collusion detected on job #{job.pk}.',
+                metadata={'window_days': window_days, 'pair_count': pair_count},
             )
             created = True
     return created
@@ -98,6 +107,16 @@ def process_payout_request(payout_request, action, actor=None, note=''):
         payout.processed_at = timezone.now()
         payout.save(update_fields=['status', 'note', 'processed_by', 'processed_at', 'updated_at'])
 
+    dispatch_webhook_event(
+        payout.user,
+        'payout.processed',
+        {
+            'payout_request_id': payout.pk,
+            'status': payout.status,
+            'amount_inr': str(payout.amount_inr),
+            'processed_by': actor.username if actor else 'system',
+        },
+    )
     return payout
 
 
@@ -207,4 +226,15 @@ def resolve_dispute(dispute_obj, outcome, actor=None, note=''):
             ]
         )
 
+    dispatch_webhook_event(
+        client,
+        'dispute.resolved',
+        {
+            'dispute_id': dispute.pk,
+            'job_id': job.pk,
+            'resolution_type': dispute.resolution_type,
+            'refund_amount_inr': str(dispute.refund_amount_inr),
+            'payout_amount_inr': str(dispute.payout_amount_inr),
+        },
+    )
     return dispute

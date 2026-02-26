@@ -14,6 +14,15 @@
     <div class="col-12 col-md-6 col-xl-3">
         <div class="card metric-card h-100">
             <div class="card-body">
+                <div class="metric-label">Needs Your Action</div>
+                <div class="metric-value {% if action_required_total %}text-warning{% else %}text-success{% endif %}">{{ action_required_total }}</div>
+                <div class="small text-muted mt-1">Pending items across proposals, milestones, disputes, and notifications.</div>
+            </div>
+        </div>
+    </div>
+    <div class="col-12 col-md-6 col-xl-3">
+        <div class="card metric-card h-100">
+            <div class="card-body">
                 <div class="metric-label">Total KP Earned</div>
                 <div class="metric-value text-success">{{ total_kp_earned }}</div>
                 <div class="small text-muted mt-1">Resolved requests you completed.</div>
@@ -32,15 +41,6 @@
     <div class="col-12 col-md-6 col-xl-3">
         <div class="card metric-card h-100">
             <div class="card-body">
-                <div class="metric-label">Posted / Helped</div>
-                <div class="metric-value">{{ requests_posted_count }} / {{ requests_helped_count }}</div>
-                <div class="small text-muted mt-1">Total request participation.</div>
-            </div>
-        </div>
-    </div>
-    <div class="col-12 col-md-6 col-xl-3">
-        <div class="card metric-card h-100">
-            <div class="card-body">
                 <div class="metric-label">Success Rate</div>
                 <div class="metric-value">{{ success_rate }}%</div>
                 <div class="small text-muted mt-1">
@@ -50,6 +50,81 @@
                         No ratings yet
                     {% endif %}
                 </div>
+            </div>
+        </div>
+    </div>
+    <div class="col-12 col-md-6 col-xl-3">
+        <div class="card metric-card h-100">
+            <div class="card-body">
+                <div class="metric-label">Posted / Helped</div>
+                <div class="metric-value">{{ requests_posted_count }} / {{ requests_helped_count }}</div>
+                <div class="small text-muted mt-1">Total request participation.</div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="row g-3 mb-4">
+    <div class="col-12 col-md-6 col-xl-3">
+        <div class="card metric-card h-100">
+            <div class="card-body">
+                <div class="metric-label">Trust v2</div>
+                <div class="metric-value">{{ trust_v2.trust_score_v2 }}</div>
+                <div class="small text-muted mt-1">On-time {{ trust_v2.on_time_rate }}% | Disputes {{ trust_v2.dispute_rate }}%</div>
+            </div>
+        </div>
+    </div>
+    <div class="col-12 col-md-6 col-xl-3">
+        <div class="card metric-card h-100">
+            <div class="card-body">
+                <div class="metric-label">Workspaces</div>
+                <div class="metric-value"><i class="bi bi-people"></i></div>
+                <a href="{% url 'workspace_list' %}" class="btn btn-sm btn-outline-primary mt-2">Open Workspaces</a>
+            </div>
+        </div>
+    </div>
+    <div class="col-12 col-md-6 col-xl-3">
+        <div class="card metric-card h-100">
+            <div class="card-body">
+                <div class="metric-label">Recommendations</div>
+                <div class="metric-value"><i class="bi bi-stars"></i></div>
+                <a href="{% url 'recommendations' %}" class="btn btn-sm btn-outline-primary mt-2">Open Feed</a>
+            </div>
+        </div>
+    </div>
+    <div class="col-12 col-md-6 col-xl-3">
+        <div class="card metric-card h-100">
+            <div class="card-body">
+                <div class="metric-label">Integrations</div>
+                <div class="metric-value"><i class="bi bi-plug"></i></div>
+                <a href="{% url 'integrations_settings' %}" class="btn btn-sm btn-outline-primary mt-2">Manage</a>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="card mb-4">
+    <div class="card-body py-3">
+        <div class="row g-2">
+            <div class="col-6 col-md-4 col-xl">
+                <div class="small text-muted">Request proposals</div>
+                <div class="fw-semibold">{{ action_required_breakdown.request_proposals }}</div>
+            </div>
+            <div class="col-6 col-md-4 col-xl">
+                <div class="small text-muted">Job proposals</div>
+                <div class="fw-semibold">{{ action_required_breakdown.job_proposals }}</div>
+            </div>
+            <div class="col-6 col-md-4 col-xl">
+                <div class="small text-muted">Milestone reviews</div>
+                <div class="fw-semibold">{{ action_required_breakdown.milestone_reviews }}</div>
+            </div>
+            <div class="col-6 col-md-6 col-xl">
+                <div class="small text-muted">Open disputes</div>
+                <div class="fw-semibold">{{ action_required_breakdown.open_disputes }}</div>
+            </div>
+            <div class="col-6 col-md-6 col-xl">
+                <div class="small text-muted">Unread notifications</div>
+                <div class="fw-semibold">{{ action_required_breakdown.unread_notifications }}</div>
             </div>
         </div>
     </div>
@@ -63,7 +138,7 @@
                     <div>
                         <h2 class="h5 mb-1">Paid Jobs</h2>
                         <p class="text-muted mb-2">Posted: {{ paid_jobs_posted }} &middot; Completed: {{ paid_jobs_completed }} &middot; Taken: {{ paid_jobs_taken }}</p>
-                        <div class="small text-muted">Total INR earned via milestones: ₹{{ paid_income }}</div>
+                        <div class="small text-muted">Total INR earned via milestones: &#8377;{{ paid_income }}</div>
                     </div>
                     <span class="badge text-bg-primary"><i class="bi bi-briefcase me-1"></i>INR</span>
                 </div>
@@ -80,7 +155,7 @@
                 <div class="d-flex justify-content-between align-items-start gap-3">
                     <div>
                         <h2 class="h5 mb-1">INR Wallet</h2>
-                        <p class="text-muted mb-2">Current balance: ₹{{ request.user.wallet_inr }}</p>
+                        <p class="text-muted mb-2">Current balance: &#8377;{{ request.user.wallet_inr }}</p>
                         <div class="small text-muted">Compliance status:
                             {% if request.user.compliance_verified %}
                                 <span class="badge text-bg-success">Verified</span>
@@ -169,3 +244,4 @@
     </div>
 </div>
 {% endblock %}
+

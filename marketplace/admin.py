@@ -6,18 +6,36 @@ from accounts.models import CustomUser
 
 from . import services
 from .models import (
+    Attachment,
     Comment,
+    Experiment,
+    ExperimentAssignment,
+    ExperimentVariant,
+    FraudAlert,
     FreelanceJob,
+    FreelanceJobProposal,
+    FreelanceJobProposalMilestone,
     HelpRequest,
+    HelpRequestProposal,
+    IntegrationApiKey,
     JobDispute,
     JobMilestone,
+    KPTransfer,
+    MilestoneDeliverable,
+    ModerationFlag,
     PayoutRequest,
+    PortfolioItem,
     Rating,
     SavedSearch,
     Skill,
     Tag,
     TrustSignal,
+    WebhookDelivery,
+    WebhookEndpoint,
     WalletLedger,
+    Workspace,
+    WorkspaceMembership,
+    WorkspaceWalletEntry,
 )
 
 
@@ -75,6 +93,15 @@ class CommentAdmin(admin.ModelAdmin):
     search_fields = ('content', 'user__username', 'request__title')
 
 
+@admin.register(HelpRequestProposal)
+class HelpRequestProposalAdmin(admin.ModelAdmin):
+    """Admin listing for KP request proposals."""
+
+    list_display = ('request', 'applicant', 'proposed_kp', 'status', 'created_at', 'selected_at')
+    list_filter = ('status', 'created_at')
+    search_fields = ('request__title', 'applicant__username', 'cover_note')
+
+
 @admin.register(Rating)
 class RatingAdmin(admin.ModelAdmin):
     """Admin listing for helper ratings."""
@@ -126,6 +153,24 @@ class FreelanceJobAdmin(admin.ModelAdmin):
     readonly_fields = ('created_at', 'updated_at')
     filter_horizontal = ('tags',)
     inlines = [JobMilestoneInline]
+
+
+@admin.register(FreelanceJobProposal)
+class FreelanceJobProposalAdmin(admin.ModelAdmin):
+    """Admin listing for paid job proposals."""
+
+    list_display = ('job', 'applicant', 'proposed_total_inr', 'status', 'created_at', 'selected_at')
+    list_filter = ('status', 'created_at')
+    search_fields = ('job__title', 'applicant__username', 'cover_note')
+
+
+@admin.register(FreelanceJobProposalMilestone)
+class FreelanceJobProposalMilestoneAdmin(admin.ModelAdmin):
+    """Admin listing for milestones proposed by freelancers."""
+
+    list_display = ('proposal', 'sequence', 'title', 'amount_inr', 'due_date', 'created_at')
+    list_filter = ('due_date',)
+    search_fields = ('proposal__job__title', 'proposal__applicant__username', 'title')
 
 
 @admin.register(JobMilestone)
@@ -242,3 +287,141 @@ class TrustSignalAdmin(admin.ModelAdmin):
     list_display = ('user', 'signal_type', 'score_delta', 'related_job', 'created_at')
     list_filter = ('signal_type',)
     search_fields = ('user__username', 'detail', 'related_job__title')
+
+
+@admin.register(MilestoneDeliverable)
+class MilestoneDeliverableAdmin(admin.ModelAdmin):
+    """Admin listing for milestone deliverables and revision workflow."""
+
+    list_display = ('milestone', 'submitted_by', 'status', 'requested_revision_at', 'approved_at', 'created_at')
+    list_filter = ('status',)
+    search_fields = ('milestone__title', 'submitted_by__username', 'revision_note')
+
+
+@admin.register(Attachment)
+class AttachmentAdmin(admin.ModelAdmin):
+    """Admin listing for file attachments across models."""
+
+    list_display = ('id', 'uploaded_by', 'content_type', 'object_id', 'caption', 'created_at')
+    list_filter = ('content_type', 'created_at')
+    search_fields = ('caption', 'uploaded_by__username', 'file')
+
+
+@admin.register(FraudAlert)
+class FraudAlertAdmin(admin.ModelAdmin):
+    """Admin listing for fraud and risk alerts."""
+
+    list_display = ('alert_type', 'severity', 'user', 'related_user', 'is_resolved', 'created_at')
+    list_filter = ('alert_type', 'severity', 'is_resolved')
+    search_fields = ('description', 'user__username', 'related_user__username')
+    actions = ('mark_resolved',)
+
+    @admin.action(description='Mark selected alerts as resolved')
+    def mark_resolved(self, request, queryset):
+        updated = queryset.filter(is_resolved=False).update(is_resolved=True)
+        self.message_user(request, f'Resolved {updated} alert(s).')
+
+
+@admin.register(KPTransfer)
+class KPTransferAdmin(admin.ModelAdmin):
+    """Admin listing for KP transfers between users."""
+
+    list_display = ('sender', 'recipient', 'amount', 'created_at')
+    list_filter = ('created_at',)
+    search_fields = ('sender__username', 'recipient__username')
+
+
+@admin.register(Workspace)
+class WorkspaceAdmin(admin.ModelAdmin):
+    """Admin listing for team workspaces."""
+
+    list_display = ('name', 'slug', 'owner', 'wallet_inr', 'created_at')
+    search_fields = ('name', 'slug', 'owner__username')
+
+
+@admin.register(WorkspaceMembership)
+class WorkspaceMembershipAdmin(admin.ModelAdmin):
+    """Admin listing for workspace member roles."""
+
+    list_display = ('workspace', 'user', 'role', 'joined_at')
+    list_filter = ('role',)
+    search_fields = ('workspace__name', 'user__username')
+
+
+@admin.register(WorkspaceWalletEntry)
+class WorkspaceWalletEntryAdmin(admin.ModelAdmin):
+    """Admin listing for workspace wallet ledger events."""
+
+    list_display = ('workspace', 'direction', 'amount_inr', 'source_type', 'actor', 'created_at')
+    list_filter = ('direction', 'source_type')
+    search_fields = ('workspace__name', 'actor__username', 'note')
+
+
+@admin.register(PortfolioItem)
+class PortfolioItemAdmin(admin.ModelAdmin):
+    """Admin listing for public portfolio items."""
+
+    list_display = ('user', 'title', 'primary_skill', 'is_featured', 'created_at')
+    list_filter = ('is_featured', 'primary_skill')
+    search_fields = ('user__username', 'title', 'summary')
+
+
+@admin.register(IntegrationApiKey)
+class IntegrationApiKeyAdmin(admin.ModelAdmin):
+    """Admin listing for issued API keys."""
+
+    list_display = ('user', 'name', 'prefix', 'is_active', 'last_used_at', 'created_at', 'revoked_at')
+    list_filter = ('is_active',)
+    search_fields = ('user__username', 'name', 'prefix')
+
+
+@admin.register(WebhookEndpoint)
+class WebhookEndpointAdmin(admin.ModelAdmin):
+    """Admin listing for webhook destinations."""
+
+    list_display = ('user', 'name', 'url', 'is_active', 'created_at', 'updated_at')
+    list_filter = ('is_active',)
+    search_fields = ('user__username', 'name', 'url')
+
+
+@admin.register(WebhookDelivery)
+class WebhookDeliveryAdmin(admin.ModelAdmin):
+    """Admin listing for webhook delivery attempts."""
+
+    list_display = ('endpoint', 'event_type', 'status_code', 'succeeded', 'created_at')
+    list_filter = ('succeeded', 'event_type')
+    search_fields = ('endpoint__name', 'event_type', 'response_excerpt')
+
+
+@admin.register(ModerationFlag)
+class ModerationFlagAdmin(admin.ModelAdmin):
+    """Admin listing for moderation reports."""
+
+    list_display = ('target_type', 'target_id', 'reported_by', 'status', 'reviewed_by', 'created_at')
+    list_filter = ('status', 'target_type')
+    search_fields = ('reason', 'reported_by__username', 'reviewed_by__username')
+
+
+@admin.register(Experiment)
+class ExperimentAdmin(admin.ModelAdmin):
+    """Admin listing for A/B experiments."""
+
+    list_display = ('name', 'slug', 'is_active', 'traffic_percentage', 'starts_at', 'ends_at')
+    list_filter = ('is_active',)
+    search_fields = ('name', 'slug')
+
+
+@admin.register(ExperimentVariant)
+class ExperimentVariantAdmin(admin.ModelAdmin):
+    """Admin listing for experiment variants."""
+
+    list_display = ('experiment', 'key', 'label', 'weight')
+    search_fields = ('experiment__slug', 'key', 'label')
+
+
+@admin.register(ExperimentAssignment)
+class ExperimentAssignmentAdmin(admin.ModelAdmin):
+    """Admin listing for variant assignments."""
+
+    list_display = ('experiment', 'variant', 'user', 'session_key', 'created_at')
+    search_fields = ('experiment__slug', 'variant__key', 'user__username', 'session_key')

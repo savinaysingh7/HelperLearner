@@ -1,0 +1,59 @@
+{% extends 'base.html' %}
+
+{% block title %}Portfolio Manager{% endblock %}
+
+{% block content %}
+<section class="page-head">
+    <span class="eyebrow"><i class="bi bi-journal-richtext"></i>Portfolio</span>
+    <h1 class="h3">Manage Public Portfolio</h1>
+    <p class="text-muted mb-0">Showcase your best work to improve selection rates.</p>
+</section>
+
+<div class="row g-3">
+    <div class="col-12 col-lg-5">
+        <div class="card h-100">
+            <div class="card-header fw-semibold">Add Item</div>
+            <div class="card-body">
+                <form method="post" class="vstack gap-2">
+                    {% csrf_token %}
+                    {{ form.title.label_tag }}{{ form.title }}
+                    {{ form.summary.label_tag }}{{ form.summary }}
+                    {{ form.primary_skill.label_tag }}{{ form.primary_skill }}
+                    {{ form.project_url.label_tag }}{{ form.project_url }}
+                    {{ form.evidence_url.label_tag }}{{ form.evidence_url }}
+                    <div class="form-check">{{ form.is_featured }} <label class="form-check-label" for="{{ form.is_featured.id_for_label }}">Featured</label></div>
+                    <button class="btn btn-primary" type="submit">Save Item</button>
+                </form>
+            </div>
+        </div>
+    </div>
+    <div class="col-12 col-lg-7">
+        <div class="card h-100">
+            <div class="card-header fw-semibold">Current Items</div>
+            <ul class="list-group list-group-flush">
+                {% for item in items %}
+                    <li class="list-group-item">
+                        <div class="d-flex justify-content-between align-items-start gap-2">
+                            <div>
+                                <div class="fw-semibold">{{ item.title }} {% if item.is_featured %}<span class="badge text-bg-warning">Featured</span>{% endif %}</div>
+                                <div class="small text-muted">{{ item.primary_skill.name|default:'General' }}</div>
+                                <div class="small mt-1">{{ item.summary }}</div>
+                                <div class="small mt-1">
+                                    {% if item.project_url %}<a href="{{ item.project_url }}" target="_blank" rel="noopener">Project</a>{% endif %}
+                                    {% if item.evidence_url %} | <a href="{{ item.evidence_url }}" target="_blank" rel="noopener">Evidence</a>{% endif %}
+                                </div>
+                            </div>
+                            <form method="post" action="{% url 'delete_portfolio_item' item.pk %}">
+                                {% csrf_token %}
+                                <button class="btn btn-sm btn-outline-danger" type="submit">Delete</button>
+                            </form>
+                        </div>
+                    </li>
+                {% empty %}
+                    <li class="list-group-item text-muted">No portfolio items yet.</li>
+                {% endfor %}
+            </ul>
+        </div>
+    </div>
+</div>
+{% endblock %}

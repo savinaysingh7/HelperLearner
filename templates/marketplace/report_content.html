@@ -1,0 +1,21 @@
+{% extends 'base.html' %}
+
+{% block title %}Report Content{% endblock %}
+
+{% block content %}
+<div class="row justify-content-center">
+    <div class="col-12 col-lg-7">
+        <div class="card">
+            <div class="card-header fw-semibold">Report {{ target_type|title }} #{{ target_id }}</div>
+            <div class="card-body">
+                <form method="post" class="vstack gap-2">
+                    {% csrf_token %}
+                    {{ form.reason.label_tag }}
+                    {{ form.reason }}
+                    <button class="btn btn-danger" type="submit">Submit Report</button>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

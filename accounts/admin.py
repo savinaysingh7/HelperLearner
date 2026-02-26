@@ -16,7 +16,10 @@ class CustomUserAdmin(UserAdmin):
         'knowledge_points',
         'wallet_inr',
         'compliance_verified',
+        'is_suspended',
+        'suspended_until',
         'notification_preference',
+        'ui_density',
         'avg_rating_display',
         'is_staff',
     ]
@@ -30,9 +33,13 @@ class CustomUserAdmin(UserAdmin):
                     'knowledge_points',
                     'wallet_inr',
                     'compliance_verified',
+                    'is_suspended',
+                    'suspended_until',
+                    'suspension_reason',
                     'skills',
                     'last_kp_claim',
                     'notification_preference',
+                    'ui_density',
                     'avg_rating_display',
                 )
             },
@@ -41,7 +48,7 @@ class CustomUserAdmin(UserAdmin):
     add_fieldsets = UserAdmin.add_fieldsets + (
         (
             'Marketplace Profile',
-            {'fields': ('bio', 'knowledge_points', 'wallet_inr', 'compliance_verified', 'skills', 'last_kp_claim', 'notification_preference')},
+            {'fields': ('bio', 'knowledge_points', 'wallet_inr', 'compliance_verified', 'is_suspended', 'suspended_until', 'suspension_reason', 'skills', 'last_kp_claim', 'notification_preference', 'ui_density')},
         ),
     )
     filter_horizontal = ('skills',)

@@ -76,3 +76,29 @@ class AccountsTests(TestCase):
         response = self.client.get(reverse('edit_profile'))
         self.assertEqual(response.status_code, 302)
         self.assertIn('/accounts/login', response['Location'])
+
+    def test_new_user_defaults_to_comfortable_density(self):
+        self.assertEqual(self.user.ui_density, CustomUser.UiDensity.COMFORTABLE)
+
+    def test_edit_profile_can_update_ui_density(self):
+        self.client.login(username='testuser', password='password123')
+        response = self.client.post(reverse('edit_profile'), {
+            'email': 'updated@example.com',
+            'bio': 'Updated Bio',
+            'notification_preference': CustomUser.NotificationPreference.BOTH,
+            'ui_density': CustomUser.UiDensity.COMPACT,
+        })
+
+        self.assertEqual(response.status_code, 302)
+        self.user.refresh_from_db()
+        self.assertEqual(self.user.ui_density, CustomUser.UiDensity.COMPACT)
+
+    def test_compact_density_adds_body_class_for_authenticated_user(self):
+        self.user.ui_density = CustomUser.UiDensity.COMPACT
+        self.user.save(update_fields=['ui_density'])
+        self.client.login(username='testuser', password='password123')
+
+        response = self.client.get(reverse('profile'))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'class="density-compact"')

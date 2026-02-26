@@ -96,6 +96,9 @@
                                         <span class="badge badge-soft">{{ req.skill_needed|default:'General' }}</span>
                                         <span class="badge {% if req.status == 'open' %}text-bg-success{% elif req.status == 'in_progress' %}text-bg-warning{% else %}text-bg-secondary{% endif %}">{{ req.get_status_display }}</span>
                                         <span class="badge {{ req.expires_at|expiry_badge_class }}">{{ req.expires_at|expires_in_days }}</span>
+                                        {% if req.status == 'open' %}
+                                            <span class="badge badge-soft"><i class="bi bi-people me-1"></i>{{ req.proposal_count }} proposal{{ req.proposal_count|pluralize }}</span>
+                                        {% endif %}
                                     </div>
                                     {% if req.skill_needed %}
                                         <p class="small text-muted mb-2">

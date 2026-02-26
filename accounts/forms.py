@@ -32,15 +32,29 @@ class UserUpdateForm(forms.ModelForm):
         required=False,
         widget=forms.CheckboxSelectMultiple(attrs={'class': 'form-check-input'}),
     )
+    ui_density = forms.ChoiceField(
+        choices=CustomUser.UiDensity.choices,
+        required=False,
+        widget=forms.Select(attrs={'class': 'form-select'}),
+    )
 
     class Meta:
         model = CustomUser
-        fields = ['email', 'bio', 'notification_preference', 'skills']
+        fields = ['email', 'bio', 'notification_preference', 'ui_density', 'skills']
         widgets = {
             'email': forms.EmailInput(attrs={'class': 'form-control'}),
             'bio': forms.Textarea(attrs={'class': 'form-control', 'rows': 4}),
             'notification_preference': forms.Select(attrs={'class': 'form-select'}),
         }
+
+    def clean_ui_density(self):
+        """Allow missing density value in partial POST payloads by keeping current setting."""
+        value = self.cleaned_data.get('ui_density')
+        if value:
+            return value
+        if self.instance and self.instance.pk:
+            return self.instance.ui_density
+        return CustomUser.UiDensity.COMFORTABLE
 
 
 class KPTransferLookupForm(forms.Form):

@@ -2,6 +2,7 @@ from django.contrib.auth.models import AbstractUser
 from django.db import models
 from django.db.models import Sum
 from django.db.models.functions import Coalesce
+from django.utils import timezone
 
 
 class CustomUser(AbstractUser):
@@ -11,16 +12,28 @@ class CustomUser(AbstractUser):
         EMAIL = 'email', 'Email only'
         NONE = 'none', 'Disable all'
 
+    class UiDensity(models.TextChoices):
+        COMFORTABLE = 'comfortable', 'Comfortable'
+        COMPACT = 'compact', 'Compact'
+
     bio = models.TextField(max_length=500, blank=True)
     knowledge_points = models.IntegerField(default=100)
     last_kp_claim = models.DateTimeField(null=True, blank=True)
     skills = models.ManyToManyField('marketplace.Skill', blank=True, related_name='users')
     wallet_inr = models.DecimalField(max_digits=12, decimal_places=2, default=0)
     compliance_verified = models.BooleanField(default=False)
+    is_suspended = models.BooleanField(default=False)
+    suspended_until = models.DateTimeField(null=True, blank=True)
+    suspension_reason = models.CharField(max_length=255, blank=True)
     notification_preference = models.CharField(
         max_length=12,
         choices=NotificationPreference.choices,
         default=NotificationPreference.BOTH,
+    )
+    ui_density = models.CharField(
+        max_length=12,
+        choices=UiDensity.choices,
+        default=UiDensity.COMFORTABLE,
     )
 
     def allows_in_app_notifications(self):
@@ -36,6 +49,14 @@ class CustomUser(AbstractUser):
             self.NotificationPreference.BOTH,
             self.NotificationPreference.EMAIL,
         }
+
+    def is_currently_suspended(self):
+        """Return True when the account is marked suspended and the suspension is still active."""
+        if not self.is_suspended:
+            return False
+        if self.suspended_until is None:
+            return True
+        return self.suspended_until > timezone.now()
 
     @property
     def trust_signal_score(self):
@@ -53,6 +74,9 @@ class CustomUser(AbstractUser):
             models.Index(fields=['knowledge_points']),
             models.Index(fields=['wallet_inr']),
             models.Index(fields=['compliance_verified']),
+            models.Index(fields=['is_suspended']),
+            models.Index(fields=['suspended_until']),
             models.Index(fields=['last_kp_claim']),
             models.Index(fields=['notification_preference']),
+            models.Index(fields=['ui_density']),
         ]
