@@ -11,15 +11,67 @@
 </section>
 
 <div class="row g-3 mb-4">
-    <div class="col-12 col-md-6 col-xl-3">
-        <div class="card metric-card h-100">
-            <div class="card-body">
-                <div class="metric-label">Needs Your Action</div>
-                <div class="metric-value {% if action_required_total %}text-warning{% else %}text-success{% endif %}">{{ action_required_total }}</div>
-                <div class="small text-muted mt-1">Pending items across proposals, milestones, disputes, and notifications.</div>
+    <div class="col-12 col-xl-8">
+        <div class="surface-card dashboard-hero h-100">
+            <div class="card-body p-4 p-lg-5">
+                <div class="d-flex flex-wrap align-items-start justify-content-between gap-3 mb-4">
+                    <div>
+                        <div class="small text-uppercase text-muted fw-bold mb-1">Overview</div>
+                        <h2 class="h4 mb-1">Welcome back, {{ request.user.username }}</h2>
+                        <p class="text-muted mb-0">Track your trust, KP flow, and active work from one place.</p>
+                    </div>
+                    <a href="{% url 'trust_score_breakdown_self' %}" class="btn btn-outline-primary btn-sm">View Trust Score v2</a>
+                </div>
+                <div class="dashboard-hero-grid mb-4">
+                    <div class="mini-stat">
+                        <div class="label">Current KP</div>
+                        <div class="value text-success">{{ request.user.knowledge_points }}</div>
+                    </div>
+                    <div class="mini-stat">
+                        <div class="label">INR Wallet</div>
+                        <div class="value">&#8377;{{ request.user.wallet_inr }}</div>
+                    </div>
+                    <div class="mini-stat">
+                        <div class="label">Trust v2</div>
+                        <div class="value">{{ trust_v2.trust_score_v2 }}</div>
+                    </div>
+                    <div class="mini-stat">
+                        <div class="label">Success Rate</div>
+                        <div class="value">{{ success_rate }}%</div>
+                    </div>
+                </div>
+                <div class="d-flex flex-wrap gap-2">
+                    <a href="{% url 'claim_daily_kp' %}" class="btn btn-primary btn-sm">Claim Daily Bonus</a>
+                    <a href="{% url 'transfer_kp' %}" class="btn btn-outline-primary btn-sm">Transfer KP</a>
+                    <a href="{% url 'create_request' %}" class="btn btn-outline-secondary btn-sm">Post Request</a>
+                </div>
             </div>
         </div>
     </div>
+    <div class="col-12 col-xl-4">
+        <div class="card h-100 action-queue-card">
+            <div class="card-body p-4">
+                <div class="d-flex justify-content-between align-items-start gap-3 mb-3">
+                    <div>
+                        <div class="metric-label">Needs Your Action</div>
+                        <div class="metric-value {% if action_required_total %}text-warning{% else %}text-success{% endif %}">{{ action_required_total }}</div>
+                    </div>
+                    <i class="bi bi-bell-fill fs-4 text-muted"></i>
+                </div>
+                <ul class="list-unstyled action-queue-list mb-3">
+                    <li><span>Request proposals</span><strong>{{ action_required_breakdown.request_proposals }}</strong></li>
+                    <li><span>Job proposals</span><strong>{{ action_required_breakdown.job_proposals }}</strong></li>
+                    <li><span>Milestone reviews</span><strong>{{ action_required_breakdown.milestone_reviews }}</strong></li>
+                    <li><span>Open disputes</span><strong>{{ action_required_breakdown.open_disputes }}</strong></li>
+                    <li><span>Unread notifications</span><strong>{{ action_required_breakdown.unread_notifications }}</strong></li>
+                </ul>
+                <a href="{% url 'notification_list' %}" class="btn btn-outline-primary btn-sm w-100">Open Notifications</a>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="row g-3 mb-4">
     <div class="col-12 col-md-6 col-xl-3">
         <div class="card metric-card h-100">
             <div class="card-body">
@@ -41,11 +93,26 @@
     <div class="col-12 col-md-6 col-xl-3">
         <div class="card metric-card h-100">
             <div class="card-body">
-                <div class="metric-label">Success Rate</div>
-                <div class="metric-value">{{ success_rate }}%</div>
+                <div class="metric-label">Posted / Helped</div>
+                <div class="metric-value">{{ requests_posted_count }} / {{ requests_helped_count }}</div>
+                <div class="small text-muted mt-1">Total request participation.</div>
+            </div>
+        </div>
+    </div>
+    <div class="col-12 col-md-6 col-xl-3">
+        <div class="card metric-card h-100">
+            <div class="card-body">
+                <div class="metric-label">Average Rating</div>
+                <div class="metric-value">
+                    {% if average_rating_received %}
+                        {{ average_rating_received|floatformat:1 }}
+                    {% else %}
+                        -
+                    {% endif %}
+                </div>
                 <div class="small text-muted mt-1">
                     {% if average_rating_received %}
-                        {{ average_rating_received|star_display }} ({{ average_rating_received|floatformat:1 }})
+                        {{ average_rating_received|star_display }}
                     {% else %}
                         No ratings yet
                     {% endif %}
@@ -53,155 +120,69 @@
             </div>
         </div>
     </div>
-    <div class="col-12 col-md-6 col-xl-3">
-        <div class="card metric-card h-100">
-            <div class="card-body">
-                <div class="metric-label">Posted / Helped</div>
-                <div class="metric-value">{{ requests_posted_count }} / {{ requests_helped_count }}</div>
-                <div class="small text-muted mt-1">Total request participation.</div>
-            </div>
-        </div>
-    </div>
 </div>
 
 <div class="row g-3 mb-4">
     <div class="col-12 col-md-6 col-xl-3">
-        <div class="card metric-card h-100">
+        <div class="surface-card h-100 quick-action-tile">
             <div class="card-body">
-                <div class="metric-label">Trust v2</div>
-                <div class="metric-value">{{ trust_v2.trust_score_v2 }}</div>
-                <div class="small text-muted mt-1">On-time {{ trust_v2.on_time_rate }}% | Disputes {{ trust_v2.dispute_rate }}%</div>
+                <div class="d-flex justify-content-between align-items-start mb-2">
+                    <h2 class="h6 mb-0">Paid Jobs</h2>
+                    <i class="bi bi-briefcase text-primary"></i>
+                </div>
+                <p class="small text-muted mb-2">Posted: {{ paid_jobs_posted }} &middot; Completed: {{ paid_jobs_completed }} &middot; Taken: {{ paid_jobs_taken }}</p>
+                <div class="small text-muted mb-3">Total INR earned: &#8377;{{ paid_income }}</div>
+                <a href="{% url 'freelance_job_list' %}" class="btn btn-outline-primary btn-sm">Browse Jobs</a>
             </div>
         </div>
     </div>
     <div class="col-12 col-md-6 col-xl-3">
-        <div class="card metric-card h-100">
+        <div class="surface-card h-100 quick-action-tile">
             <div class="card-body">
-                <div class="metric-label">Workspaces</div>
-                <div class="metric-value"><i class="bi bi-people"></i></div>
-                <a href="{% url 'workspace_list' %}" class="btn btn-sm btn-outline-primary mt-2">Open Workspaces</a>
+                <div class="d-flex justify-content-between align-items-start mb-2">
+                    <h2 class="h6 mb-0">INR Wallet</h2>
+                    <i class="bi bi-wallet2 text-success"></i>
+                </div>
+                <p class="small text-muted mb-2">Current balance: &#8377;{{ request.user.wallet_inr }}</p>
+                <div class="small text-muted mb-3">Compliance:
+                    {% if request.user.compliance_verified %}
+                        <span class="badge text-bg-success">Verified</span>
+                    {% else %}
+                        <span class="badge text-bg-warning">Pending</span>
+                    {% endif %}
+                </div>
+                <a href="{% url 'wallet_overview' %}" class="btn btn-outline-primary btn-sm">Open Wallet</a>
             </div>
         </div>
     </div>
     <div class="col-12 col-md-6 col-xl-3">
-        <div class="card metric-card h-100">
+        <div class="surface-card h-100 quick-action-tile">
             <div class="card-body">
-                <div class="metric-label">Recommendations</div>
-                <div class="metric-value"><i class="bi bi-stars"></i></div>
-                <a href="{% url 'recommendations' %}" class="btn btn-sm btn-outline-primary mt-2">Open Feed</a>
+                <div class="d-flex justify-content-between align-items-start mb-2">
+                    <h2 class="h6 mb-0">Daily Bonus</h2>
+                    <i class="bi bi-coin text-warning"></i>
+                </div>
+                {% if next_bonus_hours == 0 %}
+                    <p class="small text-muted mb-3">You can claim your +10 KP bonus now.</p>
+                {% else %}
+                    <p class="small text-muted mb-3">Next bonus in {{ next_bonus_hours }} hour{{ next_bonus_hours|pluralize }}.</p>
+                {% endif %}
+                <a href="{% url 'claim_daily_kp' %}" class="btn btn-outline-primary btn-sm">Claim Bonus</a>
             </div>
         </div>
     </div>
     <div class="col-12 col-md-6 col-xl-3">
-        <div class="card metric-card h-100">
+        <div class="surface-card h-100 quick-action-tile">
             <div class="card-body">
-                <div class="metric-label">Integrations</div>
-                <div class="metric-value"><i class="bi bi-plug"></i></div>
-                <a href="{% url 'integrations_settings' %}" class="btn btn-sm btn-outline-primary mt-2">Manage</a>
-            </div>
-        </div>
-    </div>
-</div>
-
-<div class="card mb-4">
-    <div class="card-body py-3">
-        <div class="row g-2">
-            <div class="col-6 col-md-4 col-xl">
-                <div class="small text-muted">Request proposals</div>
-                <div class="fw-semibold">{{ action_required_breakdown.request_proposals }}</div>
-            </div>
-            <div class="col-6 col-md-4 col-xl">
-                <div class="small text-muted">Job proposals</div>
-                <div class="fw-semibold">{{ action_required_breakdown.job_proposals }}</div>
-            </div>
-            <div class="col-6 col-md-4 col-xl">
-                <div class="small text-muted">Milestone reviews</div>
-                <div class="fw-semibold">{{ action_required_breakdown.milestone_reviews }}</div>
-            </div>
-            <div class="col-6 col-md-6 col-xl">
-                <div class="small text-muted">Open disputes</div>
-                <div class="fw-semibold">{{ action_required_breakdown.open_disputes }}</div>
-            </div>
-            <div class="col-6 col-md-6 col-xl">
-                <div class="small text-muted">Unread notifications</div>
-                <div class="fw-semibold">{{ action_required_breakdown.unread_notifications }}</div>
-            </div>
-        </div>
-    </div>
-</div>
-
-<div class="row g-3 mb-4">
-    <div class="col-12 col-md-6">
-        <div class="surface-card h-100">
-            <div class="card-body p-4">
-                <div class="d-flex justify-content-between align-items-start gap-3">
-                    <div>
-                        <h2 class="h5 mb-1">Paid Jobs</h2>
-                        <p class="text-muted mb-2">Posted: {{ paid_jobs_posted }} &middot; Completed: {{ paid_jobs_completed }} &middot; Taken: {{ paid_jobs_taken }}</p>
-                        <div class="small text-muted">Total INR earned via milestones: &#8377;{{ paid_income }}</div>
-                    </div>
-                    <span class="badge text-bg-primary"><i class="bi bi-briefcase me-1"></i>INR</span>
+                <div class="d-flex justify-content-between align-items-start mb-2">
+                    <h2 class="h6 mb-0">Quick Links</h2>
+                    <i class="bi bi-lightning-charge text-info"></i>
                 </div>
-                <div class="d-flex gap-2 mt-3">
-                    <a href="{% url 'freelance_job_list' %}" class="btn btn-outline-primary">Browse Jobs</a>
-                    <a href="{% url 'post_freelance_job' %}" class="btn btn-primary">Post Paid Job</a>
+                <div class="d-grid gap-2">
+                    <a href="{% url 'workspace_list' %}" class="btn btn-outline-secondary btn-sm">Workspaces</a>
+                    <a href="{% url 'recommendations' %}" class="btn btn-outline-secondary btn-sm">Recommendations</a>
+                    <a href="{% url 'integrations_settings' %}" class="btn btn-outline-secondary btn-sm">Integrations</a>
                 </div>
-            </div>
-        </div>
-    </div>
-    <div class="col-12 col-md-6">
-        <div class="surface-card h-100">
-            <div class="card-body p-4">
-                <div class="d-flex justify-content-between align-items-start gap-3">
-                    <div>
-                        <h2 class="h5 mb-1">INR Wallet</h2>
-                        <p class="text-muted mb-2">Current balance: &#8377;{{ request.user.wallet_inr }}</p>
-                        <div class="small text-muted">Compliance status:
-                            {% if request.user.compliance_verified %}
-                                <span class="badge text-bg-success">Verified</span>
-                            {% else %}
-                                <span class="badge text-bg-warning">Pending</span>
-                            {% endif %}
-                        </div>
-                    </div>
-                    <span class="badge text-bg-success"><i class="bi bi-wallet2 me-1"></i>Wallet</span>
-                </div>
-                <a href="{% url 'wallet_overview' %}" class="btn btn-outline-primary mt-3">Open INR Wallet</a>
-            </div>
-        </div>
-    </div>
-</div>
-
-<div class="row g-3 mb-4">
-    <div class="col-12 col-md-6">
-        <div class="surface-card h-100">
-            <div class="card-body p-4">
-                <div class="d-flex justify-content-between align-items-start gap-3">
-                    <div>
-                        <h2 class="h5 mb-1">Daily Bonus</h2>
-                        {% if next_bonus_hours == 0 %}
-                            <p class="text-muted mb-3">You can claim your +10 KP bonus now.</p>
-                        {% else %}
-                            <p class="text-muted mb-3">Next bonus in {{ next_bonus_hours }} hour{{ next_bonus_hours|pluralize }}.</p>
-                        {% endif %}
-                    </div>
-                    <span class="badge text-bg-success"><i class="bi bi-coin me-1"></i>+10 KP</span>
-                </div>
-                <a href="{% url 'claim_daily_kp' %}" class="btn btn-outline-primary">Go to Daily Bonus</a>
-            </div>
-        </div>
-    </div>
-    <div class="col-12 col-md-6">
-        <div class="surface-card h-100">
-            <div class="card-body p-4">
-                <div class="d-flex justify-content-between align-items-start gap-3">
-                    <div>
-                        <h2 class="h5 mb-1">Transfer KP</h2>
-                        <p class="text-muted mb-3">Send KP to another user with a confirmation step.</p>
-                    </div>
-                    <span class="badge text-bg-primary"><i class="bi bi-arrow-left-right me-1"></i>Secure</span>
-                </div>
-                <a href="{% url 'transfer_kp' %}" class="btn btn-outline-primary">Transfer KP</a>
             </div>
         </div>
     </div>
