@@ -12,6 +12,7 @@ from django.utils.html import strip_tags
 from accounts.models import CustomUser
 from marketplace.models import HelpRequest
 from notifications.models import Notification
+from notifications.utils import allows_email, allows_in_app
 
 logger = logging.getLogger(__name__)
 
@@ -44,14 +45,15 @@ class Command(BaseCommand):
                 help_request.status = 'canceled'
                 help_request.save(update_fields=['status', 'updated_at'])
 
-                Notification.objects.create(
-                    user=poster,
-                    message='Your request expired and your KP was refunded.',
-                    link=reverse('request_detail', args=[help_request.pk]),
-                )
+                if allows_in_app(poster):
+                    Notification.objects.create(
+                        user=poster,
+                        message='Your request expired and your KP was refunded.',
+                        link=reverse('request_detail', args=[help_request.pk]),
+                    )
 
                 try:
-                    if poster.email:
+                    if poster.email and allows_email(poster):
                         html_body = render_to_string(
                             'emails/expiry_notification.html',
                             {'request_obj': help_request, 'poster': poster},

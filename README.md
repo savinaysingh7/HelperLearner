@@ -7,6 +7,7 @@ HelperLearner is a Django 6 knowledge marketplace where users post help requests
 - Private requester/helper comments after claim.
 - Ratings for resolved requests.
 - Notification system for request lifecycle events (in-app + email).
+- Per-user notification delivery preferences (`in-app`, `email`, `both`, `none`).
 - User skill profiles, leaderboard, and personal dashboard analytics.
 - Tag-based discovery, skill/tag browsing, and filtered request browsing.
 - Unified full-text search across requests/users/skills with highlighting.
@@ -89,11 +90,13 @@ python manage.py notify_saved_searches
 ```
 
 ## Web Endpoints
+- `GET /healthz/` lightweight health check endpoint for uptime probes
 - `GET /search/?q=` unified search page for requests/users/skills
 - `GET /feed/` personalized activity feed (login required)
 - `GET,POST /saved-searches/` create/manage saved request filters
 - `GET,POST /kp/claim-daily/` daily +10 KP claim (24-hour cooldown)
 - `GET,POST /kp/transfer/` confirmed KP transfer flow
+- `GET,POST /accounts/profile/edit/` includes notification preference management
 
 ## API Endpoints
 All endpoints are paginated (`page_size=10`).
@@ -115,6 +118,6 @@ python manage.py test
 - Dispute workflow for resolved requests (admin-reviewed partial or full refund paths).
 - Moderation/report queue for requests/comments/profiles with admin actions and history.
 - File/snippet attachments with type and size controls.
-- Saved-search email digests and per-user notification preferences.
+- Saved-search digests with per-query frequency options (instant/daily/weekly).
 - Milestone-based request payouts with staged KP release.
 - API keys for third-party integrations and usage limits.

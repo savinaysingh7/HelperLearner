@@ -35,10 +35,11 @@ class UserUpdateForm(forms.ModelForm):
 
     class Meta:
         model = CustomUser
-        fields = ['email', 'bio', 'skills']
+        fields = ['email', 'bio', 'notification_preference', 'skills']
         widgets = {
             'email': forms.EmailInput(attrs={'class': 'form-control'}),
             'bio': forms.Textarea(attrs={'class': 'form-control', 'rows': 4}),
+            'notification_preference': forms.Select(attrs={'class': 'form-select'}),
         }
 
 

@@ -23,6 +23,10 @@ class AccountsTests(TestCase):
         })
         self.assertEqual(response.status_code, 302)
         self.assertTrue(CustomUser.objects.filter(username='newuser').exists())
+        self.assertEqual(
+            CustomUser.objects.get(username='newuser').notification_preference,
+            CustomUser.NotificationPreference.BOTH,
+        )
 
     def test_signup_rejects_weak_password(self):
         response = self.client.post(reverse('signup'), {
@@ -48,12 +52,25 @@ class AccountsTests(TestCase):
         self.client.login(username='testuser', password='password123')
         response = self.client.post(reverse('edit_profile'), {
             'email': 'updated@example.com',
-            'bio': 'Updated Bio'
+            'bio': 'Updated Bio',
+            'notification_preference': 'both',
         })
         self.assertEqual(response.status_code, 302)
         self.user.refresh_from_db()
         self.assertEqual(self.user.email, 'updated@example.com')
         self.assertEqual(self.user.bio, 'Updated Bio')
+
+    def test_edit_profile_can_update_notification_preference(self):
+        self.client.login(username='testuser', password='password123')
+        response = self.client.post(reverse('edit_profile'), {
+            'email': 'updated@example.com',
+            'bio': 'Updated Bio',
+            'notification_preference': CustomUser.NotificationPreference.NONE,
+        })
+
+        self.assertEqual(response.status_code, 302)
+        self.user.refresh_from_db()
+        self.assertEqual(self.user.notification_preference, CustomUser.NotificationPreference.NONE)
 
     def test_edit_profile_requires_login(self):
         response = self.client.get(reverse('edit_profile'))

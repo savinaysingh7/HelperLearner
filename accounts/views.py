@@ -86,7 +86,7 @@ def public_profile(request, username):
 @login_required
 @csrf_protect
 def edit_profile(request):
-    """Update the authenticated user's email, bio, and skills list."""
+    """Update the authenticated user's profile details, skills, and notification preferences."""
     if request.method == 'POST':
         form = UserUpdateForm(request.POST, instance=request.user)
         if form.is_valid():
