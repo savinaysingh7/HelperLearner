@@ -130,6 +130,8 @@ if "test" in sys.argv:
         "django.contrib.auth.backends.ModelBackend",
     ]
     SILENCED_SYSTEM_CHECKS = ["axes.W003"]
+    STATICFILES_STORAGE = "django.contrib.staticfiles.storage.StaticFilesStorage"
+    MIDDLEWARE = [mw for mw in MIDDLEWARE if mw != "whitenoise.middleware.WhiteNoiseMiddleware"]
 
 LOGGING = {
     "version": 1,

@@ -88,7 +88,10 @@ class AccountsFlowTests(TestCase):
         # Edit profile
         self.client.login(username='new', password='StrongerPass!2026')
         edit_url = reverse('edit_profile')
-        res2 = self.client.post(edit_url, {'email': 'updated@b.com', 'bio': 'hi'})
+        res2 = self.client.post(
+            edit_url,
+            {'email': 'updated@b.com', 'bio': 'hi', 'notification_preference': 'both'},
+        )
         self.assertEqual(res2.status_code, 302)
         user.refresh_from_db()
         self.assertEqual(user.email, 'updated@b.com')
@@ -99,6 +102,13 @@ class SecurityHeadersTests(TestCase):
         response = self.client.get(reverse('home'))
         self.assertEqual(response.headers.get('X-Content-Type-Options'), 'nosniff')
         self.assertEqual(response.headers.get('X-Frame-Options'), 'DENY')
+
+
+class HealthCheckTests(TestCase):
+    def test_health_check_endpoint_returns_ok_json(self):
+        response = self.client.get(reverse('health_check'))
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json(), {'status': 'ok', 'service': 'helperlearner'})
 
 
 class CsrfProtectionTests(TestCase):

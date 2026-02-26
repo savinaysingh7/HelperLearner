@@ -3,10 +3,35 @@ from django.db import models
 
 
 class CustomUser(AbstractUser):
+    class NotificationPreference(models.TextChoices):
+        BOTH = 'both', 'In-app + Email'
+        IN_APP = 'in_app', 'In-app only'
+        EMAIL = 'email', 'Email only'
+        NONE = 'none', 'Disable all'
+
     bio = models.TextField(max_length=500, blank=True)
     knowledge_points = models.IntegerField(default=100)
     last_kp_claim = models.DateTimeField(null=True, blank=True)
     skills = models.ManyToManyField('marketplace.Skill', blank=True, related_name='users')
+    notification_preference = models.CharField(
+        max_length=12,
+        choices=NotificationPreference.choices,
+        default=NotificationPreference.BOTH,
+    )
+
+    def allows_in_app_notifications(self):
+        """Return True when the user allows in-app notification delivery."""
+        return self.notification_preference in {
+            self.NotificationPreference.BOTH,
+            self.NotificationPreference.IN_APP,
+        }
+
+    def allows_email_notifications(self):
+        """Return True when the user allows email notification delivery."""
+        return self.notification_preference in {
+            self.NotificationPreference.BOTH,
+            self.NotificationPreference.EMAIL,
+        }
 
     def __str__(self):
         return self.username
@@ -16,4 +41,5 @@ class CustomUser(AbstractUser):
         indexes = [
             models.Index(fields=['knowledge_points']),
             models.Index(fields=['last_kp_claim']),
+            models.Index(fields=['notification_preference']),
         ]

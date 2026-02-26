@@ -6,7 +6,7 @@ from django.contrib import messages
 from django.contrib.auth.decorators import login_required
 from django.core.paginator import Paginator
 from django.db import transaction
-from django.db.models import Count, OuterRef, Q, Subquery, Value
+from django.db.models import Count, F, OuterRef, Q, Subquery, Value
 from django.db.models.functions import Coalesce
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
@@ -688,19 +688,24 @@ def rate_request(request, pk):
 @require_POST
 def claim_request(request, pk):
     """Claim an open request for the current user (POST-only endpoint)."""
-    help_req = get_object_or_404(HelpRequest, pk=pk)
+    with transaction.atomic():
+        help_req = get_object_or_404(
+            HelpRequest.objects.select_for_update().select_related('user'),
+            pk=pk,
+        )
 
-    if help_req.user == request.user:
-        messages.warning(request, 'You cannot claim your own request.')
-        return redirect('request_detail', pk=pk)
+        if help_req.user_id == request.user.pk:
+            messages.warning(request, 'You cannot claim your own request.')
+            return redirect('request_detail', pk=pk)
 
-    if help_req.status != 'open':
-        messages.error(request, 'This request is no longer open for claiming.')
-        return redirect('request_detail', pk=pk)
+        if help_req.status != 'open':
+            messages.error(request, 'This request is no longer open for claiming.')
+            return redirect('request_detail', pk=pk)
 
-    help_req.status = 'in_progress'
-    help_req.accepted_by = request.user
-    help_req.save()
+        help_req.status = 'in_progress'
+        help_req.accepted_by = request.user
+        help_req.save(update_fields=['status', 'accepted_by', 'updated_at'])
+
     messages.success(request, f'You have accepted the request: {help_req.title}')
     return redirect('request_detail', pk=pk)
 
@@ -727,13 +732,28 @@ def resolve_request(request, pk):
         return render(request, 'marketplace/confirm_resolve.html', {'req': help_req})
 
     with transaction.atomic():
-        help_req = get_object_or_404(HelpRequest.objects.select_for_update(), pk=pk)
-        helper = help_req.accepted_by
-        helper.knowledge_points += help_req.kp_bounty
-        helper.save()
+        help_req = get_object_or_404(
+            HelpRequest.objects.select_for_update().select_related('user', 'accepted_by'),
+            pk=pk,
+        )
+
+        if help_req.user_id != request.user.pk:
+            messages.error(request, 'Only the poster can resolve this request.')
+            return redirect('request_detail', pk=pk)
+
+        if help_req.status == 'resolved':
+            messages.info(request, 'This request has already been resolved.')
+            return redirect('request_detail', pk=pk)
+
+        if not (help_req.status == 'in_progress' and help_req.accepted_by_id):
+            messages.error(request, "Request must be 'In Progress' with a helper to be resolved.")
+            return redirect('request_detail', pk=pk)
+
+        helper = CustomUser.objects.select_for_update().get(pk=help_req.accepted_by_id)
+        CustomUser.objects.filter(pk=helper.pk).update(knowledge_points=F('knowledge_points') + help_req.kp_bounty)
 
         help_req.status = 'resolved'
-        help_req.save()
+        help_req.save(update_fields=['status', 'updated_at'])
 
         messages.success(request, f'Task resolved. {help_req.kp_bounty} KP transferred to {helper.username}.')
 
@@ -758,11 +778,23 @@ def cancel_request(request, pk):
         return render(request, 'marketplace/confirm_cancel.html', {'req': help_req})
 
     with transaction.atomic():
-        help_req = get_object_or_404(HelpRequest.objects.select_for_update(), pk=pk)
-        help_req.user.knowledge_points += help_req.kp_bounty
-        help_req.user.save()
+        help_req = get_object_or_404(
+            HelpRequest.objects.select_for_update().select_related('user'),
+            pk=pk,
+        )
+
+        if help_req.user_id != request.user.pk:
+            messages.error(request, 'Only the poster can cancel this request.')
+            return redirect('request_detail', pk=pk)
+
+        if help_req.status not in ['open', 'in_progress']:
+            messages.error(request, "Only 'Open' or 'In Progress' requests can be canceled.")
+            return redirect('request_detail', pk=pk)
+
+        poster = CustomUser.objects.select_for_update().get(pk=help_req.user_id)
+        CustomUser.objects.filter(pk=poster.pk).update(knowledge_points=F('knowledge_points') + help_req.kp_bounty)
         help_req.status = 'canceled'
-        help_req.save()
+        help_req.save(update_fields=['status', 'updated_at'])
 
         messages.success(
             request,

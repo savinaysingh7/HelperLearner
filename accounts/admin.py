@@ -10,13 +10,16 @@ class CustomUserAdmin(UserAdmin):
     """Admin configuration for custom users with KP and rating visibility."""
 
     model = CustomUser
-    list_display = ['username', 'email', 'knowledge_points', 'avg_rating_display', 'is_staff']
+    list_display = ['username', 'email', 'knowledge_points', 'notification_preference', 'avg_rating_display', 'is_staff']
     readonly_fields = ('avg_rating_display',)
     fieldsets = UserAdmin.fieldsets + (
-        ('Marketplace Profile', {'fields': ('bio', 'knowledge_points', 'skills', 'last_kp_claim', 'avg_rating_display')}),
+        (
+            'Marketplace Profile',
+            {'fields': ('bio', 'knowledge_points', 'skills', 'last_kp_claim', 'notification_preference', 'avg_rating_display')},
+        ),
     )
     add_fieldsets = UserAdmin.add_fieldsets + (
-        ('Marketplace Profile', {'fields': ('bio', 'knowledge_points', 'skills', 'last_kp_claim')}),
+        ('Marketplace Profile', {'fields': ('bio', 'knowledge_points', 'skills', 'last_kp_claim', 'notification_preference')}),
     )
     filter_horizontal = ('skills',)
 

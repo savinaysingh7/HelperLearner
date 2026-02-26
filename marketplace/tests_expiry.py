@@ -1,7 +1,8 @@
-﻿from datetime import timedelta
+from datetime import timedelta
 
+from django.core import mail
 from django.core.management import call_command
-from django.test import TestCase
+from django.test import TestCase, override_settings
 from django.urls import reverse
 from django.utils import timezone
 
@@ -82,3 +83,23 @@ class RequestExpiryTests(TestCase):
         self.assertEqual(future_open.status, 'open')
         self.assertEqual(in_progress_overdue.status, 'in_progress')
         self.assertEqual(Notification.objects.count(), 0)
+
+    @override_settings(EMAIL_BACKEND='django.core.mail.backends.locmem.EmailBackend')
+    def test_expire_requests_respects_notification_preferences(self):
+        self.user.notification_preference = CustomUser.NotificationPreference.NONE
+        self.user.save(update_fields=['notification_preference'])
+        HelpRequest.objects.create(
+            title='No notify on expiry',
+            description='desc',
+            user=self.user,
+            skill_needed=self.skill,
+            kp_bounty=8,
+            status='open',
+            expires_at=timezone.now() - timedelta(hours=2),
+        )
+
+        mail.outbox.clear()
+        call_command('expire_requests')
+
+        self.assertEqual(Notification.objects.filter(user=self.user).count(), 0)
+        self.assertEqual(len(mail.outbox), 0)

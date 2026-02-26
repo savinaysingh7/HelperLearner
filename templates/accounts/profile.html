@@ -25,6 +25,9 @@
                     <div class="small mt-2">
                         <span class="badge text-bg-primary">Trust {{ profile_user.trust_score|floatformat:1 }}/100</span>
                     </div>
+                    <div class="small mt-2">
+                        <span class="badge text-bg-light border">Notifications: {{ profile_user.get_notification_preference_display }}</span>
+                    </div>
                 </div>
 
                 <div class="text-start mt-3">

@@ -20,6 +20,7 @@ class UserSkillsFeatureTests(TestCase):
         response = self.client.post(reverse('edit_profile'), {
             'email': 'skills@example.com',
             'bio': 'Updated',
+            'notification_preference': 'both',
             'skills': [self.python.pk, self.django.pk],
         })
 
@@ -51,6 +52,7 @@ class UserSkillsFeatureTests(TestCase):
         response = self.client.post(reverse('edit_profile'), {
             'email': 'blocked@example.com',
             'bio': 'Blocked update',
+            'notification_preference': 'both',
             'skills': [self.python.pk],
         })
 

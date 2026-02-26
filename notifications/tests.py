@@ -1,4 +1,5 @@
-﻿from django.test import Client, TestCase
+from django.core import mail
+from django.test import Client, TestCase, override_settings
 from django.urls import reverse
 
 from accounts.models import CustomUser
@@ -67,3 +68,86 @@ class NotificationViewTests(TestCase):
 
         self.assertEqual(response.status_code, 200)
         self.assertEqual(self.user.notifications.filter(is_read=False).count(), 0)
+
+    def test_notification_page_shows_new_badge_for_items_that_were_unread(self):
+        Notification.objects.create(user=self.user, message='Test', link='/', is_read=False)
+        self.client.login(username='notify', password='pw')
+
+        response = self.client.get(reverse('notification_list'))
+
+        self.assertContains(response, 'New')
+
+
+@override_settings(EMAIL_BACKEND='django.core.mail.backends.locmem.EmailBackend')
+class NotificationPreferenceSignalTests(TestCase):
+    def setUp(self):
+        self.poster = CustomUser.objects.create_user(
+            username='prefposter',
+            password='pw',
+            email='prefposter@example.com',
+        )
+        self.helper = CustomUser.objects.create_user(
+            username='prefhelper',
+            password='pw',
+            email='prefhelper@example.com',
+        )
+        self.skill = Skill.objects.create(name='Flask')
+
+    def test_claim_transition_email_only_skips_in_app_notification(self):
+        self.poster.notification_preference = CustomUser.NotificationPreference.EMAIL
+        self.poster.save(update_fields=['notification_preference'])
+        request_obj = HelpRequest.objects.create(
+            title='Email only claim',
+            description='desc',
+            user=self.poster,
+            skill_needed=self.skill,
+            kp_bounty=10,
+        )
+
+        mail.outbox.clear()
+        request_obj.status = 'in_progress'
+        request_obj.accepted_by = self.helper
+        request_obj.save()
+
+        self.assertEqual(Notification.objects.filter(user=self.poster).count(), 0)
+        self.assertEqual(len(mail.outbox), 1)
+        self.assertEqual(mail.outbox[0].to, ['prefposter@example.com'])
+
+    def test_claim_transition_in_app_only_skips_email(self):
+        self.poster.notification_preference = CustomUser.NotificationPreference.IN_APP
+        self.poster.save(update_fields=['notification_preference'])
+        request_obj = HelpRequest.objects.create(
+            title='In-app only claim',
+            description='desc',
+            user=self.poster,
+            skill_needed=self.skill,
+            kp_bounty=10,
+        )
+
+        mail.outbox.clear()
+        request_obj.status = 'in_progress'
+        request_obj.accepted_by = self.helper
+        request_obj.save()
+
+        self.assertEqual(Notification.objects.filter(user=self.poster).count(), 1)
+        self.assertEqual(len(mail.outbox), 0)
+
+    def test_cancel_transition_none_blocks_helper_notification_and_email(self):
+        self.helper.notification_preference = CustomUser.NotificationPreference.NONE
+        self.helper.save(update_fields=['notification_preference'])
+        request_obj = HelpRequest.objects.create(
+            title='No delivery helper',
+            description='desc',
+            user=self.poster,
+            skill_needed=self.skill,
+            kp_bounty=10,
+            status='in_progress',
+            accepted_by=self.helper,
+        )
+
+        mail.outbox.clear()
+        request_obj.status = 'canceled'
+        request_obj.save()
+
+        self.assertEqual(Notification.objects.filter(user=self.helper).count(), 0)
+        self.assertEqual(len(mail.outbox), 0)

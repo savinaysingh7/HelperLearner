@@ -11,6 +11,7 @@ from django.utils.html import strip_tags
 from marketplace.models import HelpRequest
 
 from .models import Notification
+from .utils import allows_email, allows_in_app
 
 logger = logging.getLogger(__name__)
 
@@ -63,12 +64,13 @@ def create_help_request_notifications(sender, instance, created, **kwargs):
     detail_link = reverse('request_detail', args=[instance.pk])
 
     if instance.status == 'in_progress':
-        Notification.objects.create(
-            user=instance.user,
-            message='Someone accepted your request!',
-            link=detail_link,
-        )
-        if instance.accepted_by:
+        if allows_in_app(instance.user):
+            Notification.objects.create(
+                user=instance.user,
+                message='Someone accepted your request!',
+                link=detail_link,
+            )
+        if instance.accepted_by and allows_email(instance.user):
             _send_notification_email(
                 subject=f"Your request '{instance.title}' has been accepted by {instance.accepted_by.username}.",
                 template_name='emails/claim_notification.html',
@@ -77,27 +79,31 @@ def create_help_request_notifications(sender, instance, created, **kwargs):
             )
 
     elif instance.status == 'resolved' and instance.accepted_by:
-        Notification.objects.create(
-            user=instance.accepted_by,
-            message=f'Your help was marked resolved! You earned {instance.kp_bounty} KP.',
-            link=detail_link,
-        )
-        _send_notification_email(
-            subject=f"Your request '{instance.title}' was resolved. {instance.kp_bounty} KP were paid to {instance.accepted_by.username}.",
-            template_name='emails/resolve_notification.html',
-            context={'request_obj': instance, 'poster': instance.user, 'helper': instance.accepted_by},
-            recipient_email=instance.user.email,
-        )
+        if allows_in_app(instance.accepted_by):
+            Notification.objects.create(
+                user=instance.accepted_by,
+                message=f'Your help was marked resolved! You earned {instance.kp_bounty} KP.',
+                link=detail_link,
+            )
+        if allows_email(instance.user):
+            _send_notification_email(
+                subject=f"Your request '{instance.title}' was resolved. {instance.kp_bounty} KP were paid to {instance.accepted_by.username}.",
+                template_name='emails/resolve_notification.html',
+                context={'request_obj': instance, 'poster': instance.user, 'helper': instance.accepted_by},
+                recipient_email=instance.user.email,
+            )
 
     elif instance.status == 'canceled' and instance.accepted_by:
-        Notification.objects.create(
-            user=instance.accepted_by,
-            message='The request you were working on was canceled.',
-            link=detail_link,
-        )
-        _send_notification_email(
-            subject=f"The request '{instance.title}' was canceled.",
-            template_name='emails/cancel_notification.html',
-            context={'request_obj': instance, 'poster': instance.user, 'helper': instance.accepted_by},
-            recipient_email=instance.accepted_by.email,
-        )
+        if allows_in_app(instance.accepted_by):
+            Notification.objects.create(
+                user=instance.accepted_by,
+                message='The request you were working on was canceled.',
+                link=detail_link,
+            )
+        if allows_email(instance.accepted_by):
+            _send_notification_email(
+                subject=f"The request '{instance.title}' was canceled.",
+                template_name='emails/cancel_notification.html',
+                context={'request_obj': instance, 'poster': instance.user, 'helper': instance.accepted_by},
+                recipient_email=instance.accepted_by.email,
+            )
