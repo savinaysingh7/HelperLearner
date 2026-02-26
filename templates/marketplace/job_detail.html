@@ -1,0 +1,136 @@
+{% extends 'base.html' %}
+
+{% block title %}{{ job.title }} | Paid Job{% endblock %}
+
+{% block content %}
+<section class="page-head">
+    <span class="eyebrow"><i class="bi bi-cash-stack"></i>Paid Job</span>
+    <h1 class="h3">{{ job.title }}</h1>
+    <p class="text-muted mb-0">Client: <a href="{% url 'public_profile' job.client.username %}" class="text-decoration-none">{{ job.client.username }}</a></p>
+</section>
+
+<div class="row g-3">
+    <div class="col-12 col-lg-8">
+        <div class="card request-detail-card">
+            <div class="card-body">
+                <div class="d-flex flex-wrap gap-2 mb-3">
+                    <span class="badge text-bg-primary">₹{{ job.budget_inr }}</span>
+                    <span class="badge text-bg-secondary">{{ job.get_payment_type_display }}</span>
+                    <span class="badge {% if job.status == 'open' %}text-bg-success{% elif job.status == 'in_progress' %}text-bg-warning{% elif job.status == 'disputed' %}text-bg-danger{% else %}text-bg-secondary{% endif %}">
+                        {{ job.get_status_display }}
+                    </span>
+                    <span class="badge text-bg-light border">Escrow: ₹{{ job.escrow_inr }}</span>
+                </div>
+
+                <p>{{ job.description }}</p>
+
+                <div class="d-flex flex-wrap gap-1 mb-3">
+                    {% if job.skill_needed %}
+                        <span class="badge badge-soft">{{ job.skill_needed.name }}</span>
+                    {% endif %}
+                    {% for tag in job.tags.all %}
+                        <span class="badge badge-soft">#{{ tag.name }}</span>
+                    {% endfor %}
+                </div>
+
+                <div class="d-flex flex-wrap gap-2">
+                    {% if can_claim %}
+                        <form method="post" action="{% url 'claim_freelance_job' job.pk %}">
+                            {% csrf_token %}
+                            <button type="submit" class="btn btn-primary">Accept Job</button>
+                        </form>
+                    {% endif %}
+
+                    {% if can_cancel %}
+                        <a href="{% url 'cancel_freelance_job' job.pk %}" class="btn btn-outline-danger">Cancel Job</a>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+
+        <div class="card mt-3">
+            <div class="card-header fw-semibold">Milestones</div>
+            <div class="card-body">
+                <div class="table-responsive">
+                    <table class="table align-middle mb-0">
+                        <thead>
+                            <tr>
+                                <th>#</th>
+                                <th>Title</th>
+                                <th>Amount</th>
+                                <th>Status</th>
+                                <th>Action</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for milestone in job.milestones.all %}
+                                <tr>
+                                    <td>{{ milestone.sequence }}</td>
+                                    <td>{{ milestone.title }}</td>
+                                    <td>₹{{ milestone.amount_inr }}</td>
+                                    <td><span class="badge {% if milestone.status == 'released' %}text-bg-success{% elif milestone.status == 'submitted' %}text-bg-warning{% elif milestone.status == 'disputed' %}text-bg-danger{% else %}text-bg-secondary{% endif %}">{{ milestone.get_status_display }}</span></td>
+                                    <td>
+                                        {% if can_work and milestone.status == 'pending' %}
+                                            <form method="post" action="{% url 'submit_job_milestone' job.pk milestone.pk %}">
+                                                {% csrf_token %}
+                                                <button type="submit" class="btn btn-outline-primary btn-sm">Submit</button>
+                                            </form>
+                                        {% elif can_manage and milestone.status == 'submitted' %}
+                                            <form method="post" action="{% url 'release_job_milestone' job.pk milestone.pk %}">
+                                                {% csrf_token %}
+                                                <button type="submit" class="btn btn-success btn-sm">Release Payment</button>
+                                            </form>
+                                        {% else %}
+                                            <span class="text-muted small">-</span>
+                                        {% endif %}
+                                    </td>
+                                </tr>
+                            {% empty %}
+                                <tr><td colspan="5" class="text-muted">No milestones yet.</td></tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-12 col-lg-4">
+        {% if can_add_milestone %}
+            <div class="card mb-3">
+                <div class="card-header fw-semibold">Add Milestone</div>
+                <div class="card-body">
+                    <form method="post" action="{% url 'add_job_milestone' job.pk %}">
+                        {% csrf_token %}
+                        <div class="mb-2">
+                            <label class="form-label" for="{{ milestone_form.title.id_for_label }}">Title</label>
+                            {{ milestone_form.title }}
+                        </div>
+                        <div class="mb-2">
+                            <label class="form-label" for="{{ milestone_form.amount_inr.id_for_label }}">Amount (INR)</label>
+                            {{ milestone_form.amount_inr }}
+                        </div>
+                        <button type="submit" class="btn btn-primary w-100">Add Milestone</button>
+                    </form>
+                </div>
+            </div>
+        {% endif %}
+
+        {% if can_open_dispute %}
+            <div class="card">
+                <div class="card-header fw-semibold">Open Dispute</div>
+                <div class="card-body">
+                    <form method="post" action="{% url 'open_job_dispute' job.pk %}">
+                        {% csrf_token %}
+                        <div class="mb-2">
+                            <label class="form-label" for="{{ dispute_form.reason.id_for_label }}">Reason</label>
+                            {{ dispute_form.reason }}
+                        </div>
+                        <button type="submit" class="btn btn-outline-danger w-100">Open Dispute</button>
+                    </form>
+                </div>
+            </div>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}

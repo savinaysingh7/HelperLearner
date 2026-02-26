@@ -1,5 +1,6 @@
 import json
 import logging
+from decimal import Decimal
 from urllib.parse import urlencode
 
 import django_filters
@@ -7,11 +8,12 @@ from django.contrib import messages
 from django.contrib.auth.decorators import login_required
 from django.core.paginator import Paginator
 from django.db import transaction
-from django.db.models import Count, F, OuterRef, Q, Subquery, Value
+from django.db.models import Count, F, Max, OuterRef, Q, Subquery, Value
 from django.db.models.functions import Coalesce
 from django.http import JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
+from django.utils import timezone
 from django.views.decorators.csrf import csrf_protect
 from django.views.decorators.http import require_POST
 from django_ratelimit.decorators import ratelimit
@@ -22,16 +24,42 @@ from rest_framework.response import Response
 
 from accounts.models import CustomUser
 from accounts.query_utils import annotate_user_metrics
+from notifications.models import Notification
 
 from .ai_assistant import generate_request_assistance
-from .forms import CommentForm, HelpRequestForm, RatingForm, SavedSearchForm, SearchForm
-from .models import Comment, HelpRequest, Rating, SavedSearch, Skill, Tag
+from .forms import (
+    CommentForm,
+    FreelanceJobForm,
+    HelpRequestForm,
+    JobDisputeForm,
+    JobMilestoneForm,
+    PayoutRequestForm,
+    RatingForm,
+    SavedSearchForm,
+    SearchForm,
+)
+from .models import (
+    Comment,
+    FreelanceJob,
+    HelpRequest,
+    JobDispute,
+    JobMilestone,
+    PayoutRequest,
+    Rating,
+    SavedSearch,
+    Skill,
+    Tag,
+    TrustSignal,
+    WalletLedger,
+)
 from .serializers import (
+    FreelanceJobSerializer,
     HelpRequestSerializer,
     PublicCommentSerializer,
     PublicUserSerializer,
     SkillSerializer,
 )
+from .services import evaluate_job_collusion, record_wallet_entry
 
 logger = logging.getLogger(__name__)
 
@@ -41,9 +69,16 @@ def home(request):
     context = {
         'total_users': CustomUser.objects.count(),
         'open_requests': HelpRequest.objects.filter(status='open').count(),
+        'open_paid_jobs': FreelanceJob.objects.filter(status='open').count(),
         'recent_requests': (
             HelpRequest.objects.filter(status='open')
             .select_related('skill_needed')
+            .prefetch_related('tags')
+            .order_by('-created_at')[:3]
+        ),
+        'recent_paid_jobs': (
+            FreelanceJob.objects.filter(status='open')
+            .select_related('client', 'skill_needed')
             .prefetch_related('tags')
             .order_by('-created_at')[:3]
         ),
@@ -137,6 +172,24 @@ def _create_or_reactivate_saved_search(user, query, skill, tag):
             saved_search.save(update_fields=['is_active'])
         return saved_search, False
     return SavedSearch.objects.create(user=user, query=query, skill=skill, tag=tag), True
+
+
+def _record_wallet_entry(user, direction, amount_inr, source_type, reference_id=None, description=''):
+    """Persist a wallet ledger entry for auditability."""
+    record_wallet_entry(
+        user=user,
+        direction=direction,
+        amount_inr=amount_inr,
+        source_type=source_type,
+        reference_id=reference_id,
+        description=description,
+    )
+
+
+def _notify_user(user, message, link):
+    """Create an in-app notification when recipient exists."""
+    if user:
+        Notification.objects.create(user=user, message=message, link=link)
 
 
 def request_list(request):
@@ -836,6 +889,389 @@ def cancel_request(request, pk):
     return redirect('request_detail', pk=pk)
 
 
+def freelance_job_list(request):
+    """List paid freelance jobs with optional status, skill, and query filters."""
+    all_jobs = (
+        FreelanceJob.objects.select_related('client', 'freelancer', 'skill_needed')
+        .prefetch_related('tags', 'milestones')
+        .order_by('-created_at')
+    )
+    query = (request.GET.get('q') or '').strip()
+    status_filter = (request.GET.get('status') or '').strip()
+    skill_filter = (request.GET.get('skill') or '').strip()
+
+    if query:
+        all_jobs = all_jobs.filter(Q(title__icontains=query) | Q(description__icontains=query))
+    if status_filter in {'open', 'in_progress', 'completed', 'canceled', 'disputed'}:
+        all_jobs = all_jobs.filter(status=status_filter)
+    if skill_filter.isdigit():
+        all_jobs = all_jobs.filter(skill_needed_id=int(skill_filter))
+
+    paginator = Paginator(all_jobs, 10)
+    page_obj = paginator.get_page(request.GET.get('page'))
+    context = {
+        'jobs': page_obj,
+        'page_obj': page_obj,
+        'skills': Skill.objects.order_by('name'),
+        'query': query,
+        'status_filter': status_filter,
+        'skill_filter': skill_filter,
+    }
+    return render(request, 'marketplace/job_list.html', context)
+
+
+@login_required
+@csrf_protect
+@ratelimit(key='ip', rate='6/m', block=True)
+def post_freelance_job(request):
+    """Create a paid freelance job and move budget into INR escrow."""
+    if request.method == 'POST':
+        form = FreelanceJobForm(request.POST)
+        if form.is_valid():
+            with transaction.atomic():
+                client = CustomUser.objects.select_for_update().get(pk=request.user.pk)
+                budget = form.cleaned_data['budget_inr']
+                if client.wallet_inr < budget:
+                    form.add_error('budget_inr', 'Insufficient INR wallet balance for escrow.')
+                    return render(request, 'marketplace/job_create.html', {'form': form})
+
+                client.wallet_inr -= budget
+                client.save(update_fields=['wallet_inr'])
+
+                job = form.save(commit=False)
+                job.client = client
+                job.escrow_inr = budget
+                job.save()
+                form.save_tags(job)
+
+                JobMilestone.objects.create(
+                    job=job,
+                    title='Final delivery',
+                    amount_inr=budget,
+                    sequence=1,
+                )
+                _record_wallet_entry(
+                    user=client,
+                    direction='debit',
+                    amount_inr=budget,
+                    source_type='job_escrow',
+                    reference_id=job.pk,
+                    description=f'Escrow funded for freelance job #{job.pk}',
+                )
+            messages.success(request, 'Freelance job posted with INR escrow funded.')
+            return redirect('freelance_job_detail', pk=job.pk)
+    else:
+        form = FreelanceJobForm()
+
+    return render(request, 'marketplace/job_create.html', {'form': form})
+
+
+def freelance_job_detail(request, pk):
+    """Show paid job details, milestones, and participant actions."""
+    job = get_object_or_404(
+        FreelanceJob.objects.select_related('client', 'freelancer', 'skill_needed').prefetch_related('tags', 'milestones', 'disputes'),
+        pk=pk,
+    )
+    can_claim = request.user.is_authenticated and job.status == 'open' and request.user != job.client
+    can_manage = request.user.is_authenticated and request.user == job.client
+    can_work = request.user.is_authenticated and request.user == job.freelancer and job.status == 'in_progress'
+    can_dispute = request.user.is_authenticated and request.user in [job.client, job.freelancer]
+    can_cancel = can_manage and job.status in {'open', 'in_progress', 'disputed'}
+    can_add_milestone = can_manage and job.status in {'open', 'in_progress'}
+    can_open_dispute = can_dispute and job.status in {'in_progress', 'disputed'}
+    context = {
+        'job': job,
+        'can_claim': can_claim,
+        'can_manage': can_manage,
+        'can_work': can_work,
+        'can_dispute': can_dispute,
+        'can_cancel': can_cancel,
+        'can_add_milestone': can_add_milestone,
+        'can_open_dispute': can_open_dispute,
+        'milestone_form': JobMilestoneForm(),
+        'dispute_form': JobDisputeForm(),
+    }
+    return render(request, 'marketplace/job_detail.html', context)
+
+
+@login_required
+@csrf_protect
+@require_POST
+@ratelimit(key='ip', rate='20/m', block=True)
+def claim_freelance_job(request, pk):
+    """Allow a freelancer to claim an open paid job."""
+    with transaction.atomic():
+        job = get_object_or_404(FreelanceJob.objects.select_for_update().select_related('client'), pk=pk)
+        if job.client_id == request.user.pk:
+            messages.error(request, 'You cannot claim your own freelance job.')
+            return redirect('freelance_job_detail', pk=pk)
+        if job.status != 'open':
+            messages.error(request, 'This job is no longer open.')
+            return redirect('freelance_job_detail', pk=pk)
+
+        job.freelancer = request.user
+        job.status = 'in_progress'
+        job.save(update_fields=['freelancer', 'status', 'updated_at'])
+
+        _notify_user(job.client, 'A freelancer accepted your paid job.', reverse('freelance_job_detail', args=[job.pk]))
+        messages.success(request, 'You accepted this freelance job.')
+    return redirect('freelance_job_detail', pk=pk)
+
+
+@login_required
+@csrf_protect
+@require_POST
+def add_job_milestone(request, pk):
+    """Add a milestone to a paid job (client only)."""
+    job = get_object_or_404(FreelanceJob.objects.select_related('client'), pk=pk)
+    if request.user != job.client:
+        messages.error(request, 'Only the client can add milestones.')
+        return redirect('freelance_job_detail', pk=pk)
+    if job.status not in {'open', 'in_progress'}:
+        messages.error(request, 'Milestones can only be added while a job is active.')
+        return redirect('freelance_job_detail', pk=pk)
+
+    form = JobMilestoneForm(request.POST)
+    if not form.is_valid():
+        messages.error(request, 'Provide a valid milestone title and amount.')
+        return redirect('freelance_job_detail', pk=pk)
+
+    with transaction.atomic():
+        locked_job = get_object_or_404(FreelanceJob.objects.select_for_update(), pk=pk)
+        next_sequence = (locked_job.milestones.aggregate(max_seq=Coalesce(Max('sequence'), 0))['max_seq'] or 0) + 1
+        milestone = form.save(commit=False)
+        milestone.job = locked_job
+        milestone.sequence = next_sequence
+        milestone.full_clean()
+        milestone.save()
+    messages.success(request, 'Milestone added.')
+    return redirect('freelance_job_detail', pk=pk)
+
+
+@login_required
+@csrf_protect
+@require_POST
+def submit_job_milestone(request, pk, milestone_id):
+    """Allow assigned freelancer to mark a milestone as submitted."""
+    with transaction.atomic():
+        job = get_object_or_404(FreelanceJob.objects.select_for_update().select_related('freelancer', 'client'), pk=pk)
+        milestone = get_object_or_404(JobMilestone.objects.select_for_update(), pk=milestone_id, job=job)
+        if request.user != job.freelancer:
+            messages.error(request, 'Only the assigned freelancer can submit milestones.')
+            return redirect('freelance_job_detail', pk=pk)
+        if job.status != 'in_progress':
+            messages.error(request, 'Milestones can only be submitted while job is in progress.')
+            return redirect('freelance_job_detail', pk=pk)
+        if milestone.status != 'pending':
+            messages.error(request, 'This milestone is not in pending state.')
+            return redirect('freelance_job_detail', pk=pk)
+
+        milestone.status = 'submitted'
+        milestone.submitted_at = timezone.now()
+        milestone.save(update_fields=['status', 'submitted_at'])
+        _notify_user(job.client, f'Milestone "{milestone.title}" was submitted for review.', reverse('freelance_job_detail', args=[job.pk]))
+    messages.success(request, 'Milestone submitted for client review.')
+    return redirect('freelance_job_detail', pk=pk)
+
+
+@login_required
+@csrf_protect
+@require_POST
+def release_job_milestone(request, pk, milestone_id):
+    """Release submitted milestone escrow to freelancer (client only)."""
+    with transaction.atomic():
+        job = get_object_or_404(FreelanceJob.objects.select_for_update().select_related('client', 'freelancer'), pk=pk)
+        milestone = get_object_or_404(JobMilestone.objects.select_for_update(), pk=milestone_id, job=job)
+
+        if request.user != job.client:
+            messages.error(request, 'Only the client can release milestone payments.')
+            return redirect('freelance_job_detail', pk=pk)
+        if not job.freelancer:
+            messages.error(request, 'No freelancer assigned to this job.')
+            return redirect('freelance_job_detail', pk=pk)
+        if milestone.status != 'submitted':
+            messages.error(request, 'Only submitted milestones can be released.')
+            return redirect('freelance_job_detail', pk=pk)
+        if job.escrow_inr < milestone.amount_inr:
+            messages.error(request, 'Escrow is insufficient for this release.')
+            return redirect('freelance_job_detail', pk=pk)
+
+        freelancer = CustomUser.objects.select_for_update().get(pk=job.freelancer_id)
+        freelancer.wallet_inr += milestone.amount_inr
+        freelancer.save(update_fields=['wallet_inr'])
+
+        job.escrow_inr -= milestone.amount_inr
+        milestone.status = 'released'
+        milestone.released_at = timezone.now()
+        milestone.save(update_fields=['status', 'released_at'])
+
+        all_released = not job.milestones.exclude(status='released').exists()
+        if all_released:
+            job.status = 'completed'
+            TrustSignal.objects.create(
+                user=freelancer,
+                signal_type='job_completed',
+                score_delta=5,
+                detail=f'Completed freelance job #{job.pk}',
+                related_job=job,
+            )
+        TrustSignal.objects.create(
+            user=freelancer,
+            signal_type='milestone_released',
+            score_delta=2,
+            detail=f'Released milestone #{milestone.pk}',
+            related_job=job,
+        )
+        job.save(update_fields=['escrow_inr', 'status', 'updated_at'])
+        if all_released:
+            evaluate_job_collusion(job)
+
+        _record_wallet_entry(
+            user=freelancer,
+            direction='credit',
+            amount_inr=milestone.amount_inr,
+            source_type='job_milestone_release',
+            reference_id=milestone.pk,
+            description=f'Milestone release for job #{job.pk}',
+        )
+        _notify_user(freelancer, f'INR {milestone.amount_inr} released for milestone "{milestone.title}".', reverse('freelance_job_detail', args=[job.pk]))
+        messages.success(request, f'Milestone released: INR {milestone.amount_inr} credited to freelancer wallet.')
+    return redirect('freelance_job_detail', pk=pk)
+
+
+@login_required
+@csrf_protect
+@require_POST
+def open_job_dispute(request, pk):
+    """Open a dispute on an in-progress paid job."""
+    job = get_object_or_404(FreelanceJob.objects.select_related('client', 'freelancer'), pk=pk)
+    if request.user not in [job.client, job.freelancer]:
+        messages.error(request, 'Only job participants can open disputes.')
+        return redirect('freelance_job_detail', pk=pk)
+    if job.status not in {'in_progress', 'disputed'}:
+        messages.error(request, 'Disputes can be opened only for active paid jobs.')
+        return redirect('freelance_job_detail', pk=pk)
+
+    form = JobDisputeForm(request.POST)
+    if not form.is_valid():
+        messages.error(request, 'Please provide a dispute reason.')
+        return redirect('freelance_job_detail', pk=pk)
+
+    with transaction.atomic():
+        locked_job = get_object_or_404(FreelanceJob.objects.select_for_update(), pk=pk)
+        dispute = form.save(commit=False)
+        dispute.job = locked_job
+        dispute.opened_by = request.user
+        dispute.against_user = locked_job.freelancer if request.user == locked_job.client else locked_job.client
+        dispute.save()
+
+        locked_job.status = 'disputed'
+        locked_job.save(update_fields=['status', 'updated_at'])
+
+        TrustSignal.objects.create(
+            user=request.user,
+            signal_type='dispute_opened',
+            score_delta=-2,
+            detail=f'Dispute opened for job #{locked_job.pk}',
+            related_job=locked_job,
+        )
+    messages.warning(request, 'Dispute opened. Admin review can be added in the next phase.')
+    return redirect('freelance_job_detail', pk=pk)
+
+
+@login_required
+@csrf_protect
+def cancel_freelance_job(request, pk):
+    """Cancel a paid job and refund remaining escrow to the client wallet."""
+    job = get_object_or_404(FreelanceJob.objects.select_related('client'), pk=pk)
+    if request.user != job.client:
+        messages.error(request, 'Only the client can cancel this paid job.')
+        return redirect('freelance_job_detail', pk=pk)
+    if job.status not in {'open', 'in_progress', 'disputed'}:
+        messages.error(request, 'Only active paid jobs can be canceled.')
+        return redirect('freelance_job_detail', pk=pk)
+
+    if request.method == 'GET':
+        return render(request, 'marketplace/confirm_job_cancel.html', {'job': job})
+
+    with transaction.atomic():
+        locked_job = get_object_or_404(FreelanceJob.objects.select_for_update(), pk=pk)
+        client = CustomUser.objects.select_for_update().get(pk=locked_job.client_id)
+        refund_amount = locked_job.escrow_inr
+
+        if refund_amount > 0:
+            client.wallet_inr += refund_amount
+            client.save(update_fields=['wallet_inr'])
+            _record_wallet_entry(
+                user=client,
+                direction='credit',
+                amount_inr=refund_amount,
+                source_type='job_escrow_refund',
+                reference_id=locked_job.pk,
+                description=f'Escrow refund for canceled job #{locked_job.pk}',
+            )
+
+        locked_job.escrow_inr = Decimal('0.00')
+        locked_job.status = 'canceled'
+        locked_job.save(update_fields=['escrow_inr', 'status', 'updated_at'])
+    messages.success(request, 'Paid job canceled and remaining escrow refunded.')
+    return redirect('freelance_job_detail', pk=pk)
+
+
+@login_required
+@csrf_protect
+def wallet_overview(request):
+    """Display INR wallet activity and handle payout requests."""
+    if request.method == 'POST':
+        form = PayoutRequestForm(request.POST)
+        if form.is_valid():
+            with transaction.atomic():
+                user = CustomUser.objects.select_for_update().get(pk=request.user.pk)
+                amount = form.cleaned_data['amount_inr']
+
+                if not user.compliance_verified:
+                    messages.error(request, 'Complete compliance verification before requesting payouts.')
+                    return redirect('wallet_overview')
+                if user.wallet_inr < amount:
+                    messages.error(request, 'Insufficient wallet balance for this payout request.')
+                    return redirect('wallet_overview')
+
+                if user.payout_requests.filter(status='pending').count() >= 3:
+                    TrustSignal.objects.create(
+                        user=user,
+                        signal_type='fraud_flag',
+                        score_delta=-2,
+                        detail='High number of pending payout requests.',
+                    )
+
+                user.wallet_inr -= amount
+                user.save(update_fields=['wallet_inr'])
+                payout = PayoutRequest.objects.create(
+                    user=user,
+                    amount_inr=amount,
+                    note=form.cleaned_data.get('note', ''),
+                )
+                _record_wallet_entry(
+                    user=user,
+                    direction='debit',
+                    amount_inr=amount,
+                    source_type='payout_request',
+                    reference_id=payout.pk,
+                    description='Payout request submitted',
+                )
+            messages.success(request, 'Payout request submitted successfully.')
+            return redirect('wallet_overview')
+    else:
+        form = PayoutRequestForm()
+
+    context = {
+        'wallet_entries': request.user.wallet_entries.all()[:30],
+        'payout_requests': request.user.payout_requests.all()[:20],
+        'form': form,
+    }
+    return render(request, 'marketplace/wallet.html', context)
+
+
 class HelpRequestFilter(django_filters.FilterSet):
     """Allow API filtering of requests by status and skill id."""
 
@@ -872,6 +1308,31 @@ class HelpRequestViewSet(viewsets.ReadOnlyModelViewSet):
 
         serializer = PublicCommentSerializer(comments_qs, many=True)
         return Response(serializer.data)
+
+
+class FreelanceJobFilter(django_filters.FilterSet):
+    """Allow API filtering of paid jobs by status and skill id."""
+
+    status = django_filters.CharFilter(field_name='status')
+    skill = django_filters.NumberFilter(field_name='skill_needed_id')
+    payment_type = django_filters.CharFilter(field_name='payment_type')
+
+    class Meta:
+        model = FreelanceJob
+        fields = ['status', 'skill', 'payment_type']
+
+
+class FreelanceJobViewSet(viewsets.ReadOnlyModelViewSet):
+    """Browsable API endpoint for listing/retrieving paid freelance jobs with milestones."""
+
+    queryset = (
+        FreelanceJob.objects.select_related('client', 'freelancer', 'skill_needed')
+        .prefetch_related('tags', 'milestones')
+        .order_by('-created_at')
+    )
+    serializer_class = FreelanceJobSerializer
+    filter_backends = [DjangoFilterBackend]
+    filterset_class = FreelanceJobFilter
 
 
 class UserViewSet(mixins.ListModelMixin, viewsets.GenericViewSet):

@@ -61,6 +61,48 @@
             <div class="card-body p-4">
                 <div class="d-flex justify-content-between align-items-start gap-3">
                     <div>
+                        <h2 class="h5 mb-1">Paid Jobs</h2>
+                        <p class="text-muted mb-2">Posted: {{ paid_jobs_posted }} &middot; Completed: {{ paid_jobs_completed }} &middot; Taken: {{ paid_jobs_taken }}</p>
+                        <div class="small text-muted">Total INR earned via milestones: ₹{{ paid_income }}</div>
+                    </div>
+                    <span class="badge text-bg-primary"><i class="bi bi-briefcase me-1"></i>INR</span>
+                </div>
+                <div class="d-flex gap-2 mt-3">
+                    <a href="{% url 'freelance_job_list' %}" class="btn btn-outline-primary">Browse Jobs</a>
+                    <a href="{% url 'post_freelance_job' %}" class="btn btn-primary">Post Paid Job</a>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="col-12 col-md-6">
+        <div class="surface-card h-100">
+            <div class="card-body p-4">
+                <div class="d-flex justify-content-between align-items-start gap-3">
+                    <div>
+                        <h2 class="h5 mb-1">INR Wallet</h2>
+                        <p class="text-muted mb-2">Current balance: ₹{{ request.user.wallet_inr }}</p>
+                        <div class="small text-muted">Compliance status:
+                            {% if request.user.compliance_verified %}
+                                <span class="badge text-bg-success">Verified</span>
+                            {% else %}
+                                <span class="badge text-bg-warning">Pending</span>
+                            {% endif %}
+                        </div>
+                    </div>
+                    <span class="badge text-bg-success"><i class="bi bi-wallet2 me-1"></i>Wallet</span>
+                </div>
+                <a href="{% url 'wallet_overview' %}" class="btn btn-outline-primary mt-3">Open INR Wallet</a>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="row g-3 mb-4">
+    <div class="col-12 col-md-6">
+        <div class="surface-card h-100">
+            <div class="card-body p-4">
+                <div class="d-flex justify-content-between align-items-start gap-3">
+                    <div>
                         <h2 class="h5 mb-1">Daily Bonus</h2>
                         {% if next_bonus_hours == 0 %}
                             <p class="text-muted mb-3">You can claim your +10 KP bonus now.</p>

@@ -1,6 +1,17 @@
 ﻿from django import forms
 
-from .models import Comment, HelpRequest, Rating, SavedSearch, Skill, Tag
+from .models import (
+    Comment,
+    FreelanceJob,
+    HelpRequest,
+    JobDispute,
+    JobMilestone,
+    PayoutRequest,
+    Rating,
+    SavedSearch,
+    Skill,
+    Tag,
+)
 
 
 class HelpRequestForm(forms.ModelForm):
@@ -145,3 +156,110 @@ class SavedSearchForm(forms.ModelForm):
             raise forms.ValidationError('Provide at least one filter (query, skill, or tag).')
         cleaned_data['query'] = query
         return cleaned_data
+
+
+class FreelanceJobForm(forms.ModelForm):
+    """Form for posting/editing paid freelance jobs with comma-separated tags."""
+
+    tags_input = forms.CharField(
+        required=False,
+        label='Tags',
+        help_text='Comma-separated, e.g. django, api, backend',
+        widget=forms.TextInput(
+            attrs={
+                'class': 'form-control',
+                'placeholder': 'django, api, backend',
+            }
+        ),
+    )
+
+    class Meta:
+        model = FreelanceJob
+        fields = [
+            'title',
+            'description',
+            'skill_needed',
+            'payment_type',
+            'budget_inr',
+            'deadline',
+            'response_sla_hours',
+        ]
+        widgets = {
+            'title': forms.TextInput(attrs={'class': 'form-control', 'placeholder': 'e.g., Build JWT auth module'}),
+            'description': forms.Textarea(attrs={'class': 'form-control', 'rows': 5}),
+            'skill_needed': forms.Select(attrs={'class': 'form-select'}),
+            'payment_type': forms.Select(attrs={'class': 'form-select'}),
+            'budget_inr': forms.NumberInput(attrs={'class': 'form-control', 'min': 100, 'step': '0.01'}),
+            'deadline': forms.DateInput(attrs={'class': 'form-control', 'type': 'date'}),
+            'response_sla_hours': forms.NumberInput(attrs={'class': 'form-control', 'min': 1, 'step': 1}),
+        }
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        if self.instance and self.instance.pk:
+            self.fields['tags_input'].initial = ', '.join(
+                self.instance.tags.order_by('name').values_list('name', flat=True)
+            )
+
+    def clean_tags_input(self):
+        raw_value = self.cleaned_data.get('tags_input', '')
+        if not raw_value:
+            return []
+        parsed = [piece.strip().lower() for piece in raw_value.split(',') if piece.strip()]
+        unique = []
+        seen = set()
+        for name in parsed:
+            if name in seen:
+                continue
+            seen.add(name)
+            unique.append(name)
+        return unique
+
+    def save_tags(self, job_obj):
+        """Persist parsed tags for a saved freelance job."""
+        tag_names = self.cleaned_data.get('tags_input', [])
+        tags = [Tag.objects.get_or_create(name=name)[0] for name in tag_names]
+        job_obj.tags.set(tags)
+
+
+class JobMilestoneForm(forms.ModelForm):
+    """Form for clients to add milestones to a freelance job."""
+
+    class Meta:
+        model = JobMilestone
+        fields = ['title', 'amount_inr']
+        widgets = {
+            'title': forms.TextInput(attrs={'class': 'form-control', 'placeholder': 'e.g., Deliver API endpoints'}),
+            'amount_inr': forms.NumberInput(attrs={'class': 'form-control', 'min': 1, 'step': '0.01'}),
+        }
+
+
+class JobDisputeForm(forms.ModelForm):
+    """Form for opening a dispute on a paid freelance job."""
+
+    class Meta:
+        model = JobDispute
+        fields = ['reason']
+        widgets = {
+            'reason': forms.Textarea(
+                attrs={
+                    'class': 'form-control',
+                    'rows': 4,
+                    'placeholder': 'Explain the issue, timeline, and expected resolution.',
+                }
+            ),
+        }
+
+
+class PayoutRequestForm(forms.ModelForm):
+    """Form for users to request INR withdrawals from their wallet."""
+
+    class Meta:
+        model = PayoutRequest
+        fields = ['amount_inr', 'note']
+        widgets = {
+            'amount_inr': forms.NumberInput(attrs={'class': 'form-control', 'min': 100, 'step': '0.01'}),
+            'note': forms.TextInput(
+                attrs={'class': 'form-control', 'placeholder': 'Optional note for payout processing'}
+            ),
+        }

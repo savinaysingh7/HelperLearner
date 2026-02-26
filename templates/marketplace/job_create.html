@@ -1,0 +1,81 @@
+{% extends 'base.html' %}
+
+{% block title %}Post Paid Job | HelperLearner{% endblock %}
+
+{% block content %}
+<div class="row justify-content-center">
+    <div class="col-12 col-lg-9 col-xl-8">
+        <section class="page-head">
+            <span class="eyebrow"><i class="bi bi-briefcase-fill"></i>INR Hiring</span>
+            <h1 class="h3">Post a Freelance Job</h1>
+            <p class="text-muted mb-0">Your budget is held in escrow and released milestone-by-milestone.</p>
+        </section>
+
+        <div class="card form-shell">
+            <div class="card-body p-4 p-md-5">
+                <form method="post" novalidate>
+                    {% csrf_token %}
+
+                    <div class="mb-3">
+                        <label for="{{ form.title.id_for_label }}" class="form-label">Job Title</label>
+                        {{ form.title }}
+                        {% for error in form.title.errors %}<div class="text-danger small">{{ error }}</div>{% endfor %}
+                    </div>
+
+                    <div class="mb-3">
+                        <label for="{{ form.description.id_for_label }}" class="form-label">Description</label>
+                        {{ form.description }}
+                        {% for error in form.description.errors %}<div class="text-danger small">{{ error }}</div>{% endfor %}
+                    </div>
+
+                    <div class="mb-3">
+                        <label for="{{ form.tags_input.id_for_label }}" class="form-label">Tags</label>
+                        {{ form.tags_input }}
+                        <div class="form-text">{{ form.tags_input.help_text }}</div>
+                        {% for error in form.tags_input.errors %}<div class="text-danger small">{{ error }}</div>{% endfor %}
+                    </div>
+
+                    <div class="row g-3">
+                        <div class="col-12 col-md-6">
+                            <label for="{{ form.skill_needed.id_for_label }}" class="form-label">Skill Needed</label>
+                            {{ form.skill_needed }}
+                            {% for error in form.skill_needed.errors %}<div class="text-danger small">{{ error }}</div>{% endfor %}
+                        </div>
+                        <div class="col-12 col-md-6">
+                            <label for="{{ form.payment_type.id_for_label }}" class="form-label">Payment Type</label>
+                            {{ form.payment_type }}
+                            {% for error in form.payment_type.errors %}<div class="text-danger small">{{ error }}</div>{% endfor %}
+                        </div>
+                        <div class="col-12 col-md-4">
+                            <label for="{{ form.budget_inr.id_for_label }}" class="form-label">Budget (INR)</label>
+                            {{ form.budget_inr }}
+                            {% for error in form.budget_inr.errors %}<div class="text-danger small">{{ error }}</div>{% endfor %}
+                        </div>
+                        <div class="col-12 col-md-4">
+                            <label for="{{ form.deadline.id_for_label }}" class="form-label">Deadline</label>
+                            {{ form.deadline }}
+                            {% for error in form.deadline.errors %}<div class="text-danger small">{{ error }}</div>{% endfor %}
+                        </div>
+                        <div class="col-12 col-md-4">
+                            <label for="{{ form.response_sla_hours.id_for_label }}" class="form-label">Response SLA (hours)</label>
+                            {{ form.response_sla_hours }}
+                            {% for error in form.response_sla_hours.errors %}<div class="text-danger small">{{ error }}</div>{% endfor %}
+                        </div>
+                    </div>
+
+                    {% if form.non_field_errors %}
+                        <div class="alert alert-danger mt-3">
+                            {% for error in form.non_field_errors %}<div>{{ error }}</div>{% endfor %}
+                        </div>
+                    {% endif %}
+
+                    <div class="d-grid mt-4 gap-2">
+                        <button type="submit" class="btn btn-primary btn-lg">Create Paid Job (Fund Escrow)</button>
+                        <a href="{% url 'freelance_job_list' %}" class="btn btn-outline-secondary">Back to Jobs</a>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

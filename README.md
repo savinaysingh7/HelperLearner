@@ -15,6 +15,8 @@ HelperLearner is a Django 6 knowledge marketplace where users post help requests
 - Saved searches with notification automation for new matching requests.
 - AI draft assistant for request posting/editing (Gemini-powered title/description/tag/skill suggestions).
 - Trust score metrics surfaced on profiles, leaderboard, and user API.
+- Dual marketplace model: KP help requests + INR paid freelance jobs.
+- Milestone-based INR escrow release, disputes, wallet ledger, and payout requests.
 - DRF read-only API with pagination, filtering, and grouped search.
 - Custom Django admin dashboards/actions for all models.
 
@@ -107,6 +109,16 @@ python manage.py notify_saved_searches
 - `GET,POST /kp/transfer/` confirmed KP transfer flow
 - `GET,POST /accounts/profile/edit/` includes notification preference management
 - `POST /post/assist/` AI draft improvement endpoint (login + CSRF required)
+- `GET /jobs/` paid freelance jobs discovery
+- `GET,POST /jobs/post/` create paid freelance job and fund escrow
+- `GET /jobs/<id>/` paid job detail with milestones
+- `POST /jobs/<id>/claim/` accept paid job as freelancer
+- `POST /jobs/<id>/milestones/add/` add milestone (client)
+- `POST /jobs/<id>/milestones/<mid>/submit/` submit milestone (freelancer)
+- `POST /jobs/<id>/milestones/<mid>/release/` release milestone payment (client)
+- `GET,POST /jobs/<id>/cancel/` cancel paid job and refund escrow
+- `POST /jobs/<id>/dispute/` open paid-job dispute
+- `GET,POST /wallet/` INR wallet and payout request page
 
 ## API Endpoints
 All endpoints are paginated (`page_size=10`).
@@ -114,6 +126,7 @@ All endpoints are paginated (`page_size=10`).
 - `GET /api/requests/` (filters: `status`, `skill`)
 - `GET /api/requests/<id>/`
 - `GET /api/requests/<id>/comments/` (public comments only)
+- `GET /api/jobs/` (filters: `status`, `skill`, `payment_type`)
 - `GET /api/users/` (username, avg_rating, trust_score, knowledge_points, skills)
 - `GET /api/skills/` (skill + request_count)
 - `GET /api/search/?q=` (grouped `requests`, `users`, `skills`)
@@ -125,9 +138,9 @@ python manage.py test
 ```
 
 ## Product Roadmap Ideas
-- Dispute workflow for resolved requests (admin-reviewed partial or full refund paths).
-- Moderation/report queue for requests/comments/profiles with admin actions and history.
-- File/snippet attachments with type and size controls.
+- Full dispute arbitration console with admin evidence review and escrow split rules.
+- KYC workflow and payout processor integration for real INR withdrawals.
+- Anti-collusion and fraud-scoring engine with auto-flag thresholds.
 - Saved-search digests with per-query frequency options (instant/daily/weekly).
-- Milestone-based request payouts with staged KP release.
+- SLA-backed paid jobs with automatic penalties for breaches.
 - API keys for third-party integrations and usage limits.

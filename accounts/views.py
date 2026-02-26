@@ -1,16 +1,17 @@
 from datetime import timedelta
+from decimal import Decimal
 
 from django.contrib import messages
 from django.contrib.auth import login
 from django.contrib.auth.decorators import login_required
 from django.db import transaction
-from django.db.models import Avg, Count, Sum
+from django.db.models import Avg, Count, Sum, Value
 from django.db.models.functions import Coalesce, TruncMonth
 from django.shortcuts import get_object_or_404, redirect, render
 from django.utils import timezone
 from django.views.decorators.csrf import csrf_protect
 
-from marketplace.models import HelpRequest
+from marketplace.models import FreelanceJob, HelpRequest
 
 from .forms import DeveloperSignUpForm, KPTransferLookupForm, UserUpdateForm
 from .models import CustomUser
@@ -115,6 +116,13 @@ def dashboard(request):
     success_rate = round((resolved_posted_count / requests_posted_count) * 100, 2) if requests_posted_count else 0
 
     average_rating_received = request.user.ratings_received.aggregate(avg=Avg('score'))['avg']
+    paid_jobs_posted = FreelanceJob.objects.filter(client=request.user).count()
+    paid_jobs_completed = FreelanceJob.objects.filter(client=request.user, status='completed').count()
+    paid_jobs_taken = FreelanceJob.objects.filter(freelancer=request.user).count()
+    paid_income = (
+        request.user.wallet_entries.filter(direction='credit', source_type='job_milestone_release')
+        .aggregate(total=Coalesce(Sum('amount_inr'), Value(Decimal('0.00'))))['total']
+    )
 
     now = timezone.now()
     first_month = _month_start(now, 5)
@@ -164,6 +172,10 @@ def dashboard(request):
         'requests_helped_count': requests_helped_count,
         'success_rate': success_rate,
         'average_rating_received': average_rating_received,
+        'paid_jobs_posted': paid_jobs_posted,
+        'paid_jobs_completed': paid_jobs_completed,
+        'paid_jobs_taken': paid_jobs_taken,
+        'paid_income': paid_income,
         'monthly_activity': monthly_activity,
         'next_bonus_hours': _next_bonus_hours(request.user, now),
     }

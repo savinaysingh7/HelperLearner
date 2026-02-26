@@ -1,0 +1,114 @@
+{% extends 'base.html' %}
+
+{% block title %}INR Wallet | HelperLearner{% endblock %}
+
+{% block content %}
+<section class="page-head">
+    <span class="eyebrow"><i class="bi bi-wallet2"></i>Payments</span>
+    <h1 class="h3">INR Wallet</h1>
+    <p class="text-muted mb-0">Manage paid job earnings, escrow movements, and payout requests.</p>
+</section>
+
+<div class="row g-3">
+    <div class="col-12 col-lg-4">
+        <div class="card metric-card h-100">
+            <div class="card-body">
+                <div class="metric-label">Available Balance</div>
+                <div class="metric-value text-success">₹{{ request.user.wallet_inr }}</div>
+                <div class="small text-muted mt-1">
+                    Compliance:
+                    {% if request.user.compliance_verified %}
+                        <span class="badge text-bg-success">Verified</span>
+                    {% else %}
+                        <span class="badge text-bg-warning">Pending</span>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+
+        <div class="card mt-3">
+            <div class="card-header fw-semibold">Request Payout</div>
+            <div class="card-body">
+                <form method="post" novalidate>
+                    {% csrf_token %}
+                    <div class="mb-2">
+                        <label class="form-label" for="{{ form.amount_inr.id_for_label }}">Amount (INR)</label>
+                        {{ form.amount_inr }}
+                        {% for error in form.amount_inr.errors %}<div class="text-danger small">{{ error }}</div>{% endfor %}
+                    </div>
+                    <div class="mb-2">
+                        <label class="form-label" for="{{ form.note.id_for_label }}">Note</label>
+                        {{ form.note }}
+                        {% for error in form.note.errors %}<div class="text-danger small">{{ error }}</div>{% endfor %}
+                    </div>
+                    <button type="submit" class="btn btn-primary w-100">Submit Payout Request</button>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-12 col-lg-8">
+        <div class="card mb-3">
+            <div class="card-header fw-semibold">Recent Wallet Activity</div>
+            <div class="card-body p-0">
+                <div class="table-responsive">
+                    <table class="table mb-0 align-middle">
+                        <thead>
+                            <tr>
+                                <th>Date</th>
+                                <th>Type</th>
+                                <th>Direction</th>
+                                <th>Amount</th>
+                                <th>Description</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for entry in wallet_entries %}
+                                <tr>
+                                    <td>{{ entry.created_at|date:'M d, Y H:i' }}</td>
+                                    <td>{{ entry.source_type }}</td>
+                                    <td><span class="badge {% if entry.direction == 'credit' %}text-bg-success{% else %}text-bg-danger{% endif %}">{{ entry.direction|title }}</span></td>
+                                    <td>₹{{ entry.amount_inr }}</td>
+                                    <td>{{ entry.description|default:'-' }}</td>
+                                </tr>
+                            {% empty %}
+                                <tr><td colspan="5" class="text-muted p-3">No wallet entries yet.</td></tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <div class="card">
+            <div class="card-header fw-semibold">Payout Requests</div>
+            <div class="card-body p-0">
+                <div class="table-responsive">
+                    <table class="table mb-0 align-middle">
+                        <thead>
+                            <tr>
+                                <th>Date</th>
+                                <th>Amount</th>
+                                <th>Status</th>
+                                <th>Note</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for payout in payout_requests %}
+                                <tr>
+                                    <td>{{ payout.created_at|date:'M d, Y H:i' }}</td>
+                                    <td>₹{{ payout.amount_inr }}</td>
+                                    <td><span class="badge {% if payout.status == 'paid' %}text-bg-success{% elif payout.status == 'rejected' %}text-bg-danger{% else %}text-bg-secondary{% endif %}">{{ payout.get_status_display }}</span></td>
+                                    <td>{{ payout.note|default:'-' }}</td>
+                                </tr>
+                            {% empty %}
+                                <tr><td colspan="4" class="text-muted p-3">No payout requests yet.</td></tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

@@ -1,4 +1,5 @@
 from datetime import timedelta
+from decimal import Decimal
 
 from django.conf import settings
 from django.core.exceptions import ValidationError
@@ -170,4 +171,260 @@ class SavedSearch(models.Model):
             models.Index(fields=['user', 'is_active']),
             models.Index(fields=['created_at']),
             models.Index(fields=['last_notified_at']),
+        ]
+
+
+class FreelanceJob(models.Model):
+    STATUS_CHOICES = [
+        ('open', 'Open'),
+        ('in_progress', 'In Progress'),
+        ('completed', 'Completed'),
+        ('canceled', 'Canceled'),
+        ('disputed', 'Disputed'),
+    ]
+    PAYMENT_CHOICES = [
+        ('fixed', 'Fixed Price'),
+        ('hourly', 'Hourly'),
+    ]
+
+    title = models.CharField(max_length=220)
+    description = models.TextField()
+    client = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='freelance_jobs_posted')
+    freelancer = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='freelance_jobs_taken',
+    )
+    skill_needed = models.ForeignKey(Skill, on_delete=models.SET_NULL, null=True, blank=True)
+    tags = models.ManyToManyField(Tag, blank=True, related_name='freelance_jobs')
+    payment_type = models.CharField(max_length=12, choices=PAYMENT_CHOICES, default='fixed')
+    budget_inr = models.DecimalField(max_digits=10, decimal_places=2, validators=[MinValueValidator(Decimal('100.00'))])
+    escrow_inr = models.DecimalField(max_digits=10, decimal_places=2, default=0, validators=[MinValueValidator(Decimal('0.00'))])
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='open')
+    deadline = models.DateField(null=True, blank=True)
+    response_sla_hours = models.PositiveIntegerField(default=24, validators=[MinValueValidator(1)])
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    def clean(self):
+        """Prevent self-assignment and negative escrow conditions."""
+        if self.freelancer_id and self.freelancer_id == self.client_id:
+            raise ValidationError('Client and freelancer must be different users.')
+        if self.escrow_inr < 0:
+            raise ValidationError('Escrow cannot be negative.')
+
+    def save(self, *args, **kwargs):
+        """Initialize escrow from budget for new jobs when not explicitly provided."""
+        if self._state.adding and not self.escrow_inr:
+            self.escrow_inr = self.budget_inr
+        super().save(*args, **kwargs)
+
+    def __str__(self):
+        return f'{self.title} ({self.get_status_display()})'
+
+    class Meta:
+        ordering = ['-created_at']
+        indexes = [
+            models.Index(fields=['status']),
+            models.Index(fields=['payment_type']),
+            models.Index(fields=['skill_needed']),
+            models.Index(fields=['client']),
+            models.Index(fields=['freelancer']),
+            models.Index(fields=['created_at']),
+            models.Index(fields=['status', 'created_at']),
+        ]
+
+
+class JobMilestone(models.Model):
+    STATUS_CHOICES = [
+        ('pending', 'Pending'),
+        ('submitted', 'Submitted'),
+        ('released', 'Released'),
+        ('disputed', 'Disputed'),
+    ]
+
+    job = models.ForeignKey(FreelanceJob, on_delete=models.CASCADE, related_name='milestones')
+    title = models.CharField(max_length=140)
+    amount_inr = models.DecimalField(max_digits=10, decimal_places=2, validators=[MinValueValidator(Decimal('1.00'))])
+    sequence = models.PositiveIntegerField(default=1)
+    status = models.CharField(max_length=12, choices=STATUS_CHOICES, default='pending')
+    submitted_at = models.DateTimeField(null=True, blank=True)
+    released_at = models.DateTimeField(null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    def clean(self):
+        """Ensure milestone totals do not exceed job budget."""
+        existing_total = (
+            JobMilestone.objects.filter(job=self.job)
+            .exclude(pk=self.pk)
+            .aggregate(total=models.Sum('amount_inr'))['total']
+            or Decimal('0.00')
+        )
+        if existing_total + (self.amount_inr or Decimal('0.00')) > self.job.budget_inr:
+            raise ValidationError('Total milestone amount cannot exceed job budget.')
+
+    def __str__(self):
+        return f'{self.job.title} - M{self.sequence}: {self.title}'
+
+    class Meta:
+        ordering = ['sequence', 'created_at']
+        indexes = [
+            models.Index(fields=['job', 'sequence']),
+            models.Index(fields=['status']),
+        ]
+        constraints = [
+            models.UniqueConstraint(fields=['job', 'sequence'], name='unique_job_milestone_sequence'),
+        ]
+
+
+class JobDispute(models.Model):
+    STATUS_CHOICES = [
+        ('open', 'Open'),
+        ('resolved', 'Resolved'),
+        ('rejected', 'Rejected'),
+    ]
+    RESOLUTION_CHOICES = [
+        ('', 'Unresolved'),
+        ('refund_client', 'Refund Client'),
+        ('pay_freelancer', 'Pay Freelancer'),
+        ('split', 'Split 50/50'),
+    ]
+
+    job = models.ForeignKey(FreelanceJob, on_delete=models.CASCADE, related_name='disputes')
+    opened_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='job_disputes_opened')
+    against_user = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='job_disputes_received',
+    )
+    reason = models.TextField()
+    status = models.CharField(max_length=12, choices=STATUS_CHOICES, default='open')
+    resolution_type = models.CharField(max_length=20, choices=RESOLUTION_CHOICES, blank=True, default='')
+    refund_amount_inr = models.DecimalField(
+        max_digits=10,
+        decimal_places=2,
+        default=0,
+        validators=[MinValueValidator(Decimal('0.00'))],
+    )
+    payout_amount_inr = models.DecimalField(
+        max_digits=10,
+        decimal_places=2,
+        default=0,
+        validators=[MinValueValidator(Decimal('0.00'))],
+    )
+    resolution_note = models.TextField(blank=True)
+    resolved_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='resolved_job_disputes',
+    )
+    resolved_at = models.DateTimeField(null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    def __str__(self):
+        return f'Dispute #{self.pk} - {self.job.title}'
+
+    class Meta:
+        ordering = ['-created_at']
+        indexes = [
+            models.Index(fields=['job']),
+            models.Index(fields=['status']),
+            models.Index(fields=['created_at']),
+        ]
+
+
+class WalletLedger(models.Model):
+    DIRECTION_CHOICES = [
+        ('credit', 'Credit'),
+        ('debit', 'Debit'),
+    ]
+
+    user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='wallet_entries')
+    direction = models.CharField(max_length=8, choices=DIRECTION_CHOICES)
+    amount_inr = models.DecimalField(max_digits=10, decimal_places=2, validators=[MinValueValidator(Decimal('0.01'))])
+    source_type = models.CharField(max_length=40)
+    reference_id = models.PositiveIntegerField(null=True, blank=True)
+    description = models.CharField(max_length=255, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    def __str__(self):
+        return f'{self.user.username} {self.direction} INR {self.amount_inr}'
+
+    class Meta:
+        ordering = ['-created_at']
+        indexes = [
+            models.Index(fields=['user', 'created_at']),
+            models.Index(fields=['source_type']),
+        ]
+
+
+class PayoutRequest(models.Model):
+    STATUS_CHOICES = [
+        ('pending', 'Pending'),
+        ('approved', 'Approved'),
+        ('rejected', 'Rejected'),
+        ('paid', 'Paid'),
+    ]
+
+    user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='payout_requests')
+    amount_inr = models.DecimalField(max_digits=10, decimal_places=2, validators=[MinValueValidator(Decimal('100.00'))])
+    status = models.CharField(max_length=12, choices=STATUS_CHOICES, default='pending')
+    note = models.CharField(max_length=255, blank=True)
+    processed_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='processed_payout_requests',
+    )
+    processed_at = models.DateTimeField(null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    def clean(self):
+        """Require sufficient wallet balance at request time."""
+        if self.user_id and self.user.wallet_inr < self.amount_inr:
+            raise ValidationError('Insufficient wallet balance for payout request.')
+
+    def __str__(self):
+        return f'Payout {self.amount_inr} by {self.user.username} ({self.status})'
+
+    class Meta:
+        ordering = ['-created_at']
+        indexes = [
+            models.Index(fields=['user', 'status']),
+            models.Index(fields=['created_at']),
+        ]
+
+
+class TrustSignal(models.Model):
+    SIGNAL_CHOICES = [
+        ('job_completed', 'Job Completed'),
+        ('milestone_released', 'Milestone Released'),
+        ('dispute_opened', 'Dispute Opened'),
+        ('fraud_flag', 'Fraud Flag'),
+    ]
+
+    user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='trust_signals')
+    signal_type = models.CharField(max_length=24, choices=SIGNAL_CHOICES)
+    score_delta = models.IntegerField()
+    detail = models.CharField(max_length=255, blank=True)
+    related_job = models.ForeignKey(FreelanceJob, on_delete=models.SET_NULL, null=True, blank=True, related_name='trust_signals')
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    def __str__(self):
+        return f'{self.user.username} {self.signal_type} ({self.score_delta:+d})'
+
+    class Meta:
+        ordering = ['-created_at']
+        indexes = [
+            models.Index(fields=['user', 'created_at']),
+            models.Index(fields=['signal_type']),
         ]
