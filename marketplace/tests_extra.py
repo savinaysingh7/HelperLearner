@@ -11,7 +11,8 @@ from django.urls import reverse
 from helperlearner_root.logging_context import RequestContextFilter, reset_request_context, set_request_context
 
 from .forms import HelpRequestForm
-from .models import HelpRequest, Skill
+from .models import HelpRequest, Skill, WebhookEndpoint
+from .webhooks import dispatch_webhook_event
 
 User = get_user_model()
 
@@ -223,3 +224,46 @@ class CsrfProtectionTests(TestCase):
         self.client.login(username='helper', password='pw')
         response = self.client.post(reverse('claim_request', args=[help_request.pk]))
         self.assertEqual(response.status_code, 403)
+
+
+class WebhookDispatchTests(TestCase):
+    def setUp(self):
+        self.owner = User.objects.create_user(username='webhook_owner', password='pw')
+        self.endpoint = WebhookEndpoint.objects.create(
+            user=self.owner,
+            name='Primary endpoint',
+            url='https://example.com/hooks/main',
+            subscribed_events=['request.status_changed'],
+            is_active=True,
+        )
+
+    @override_settings(WEBHOOK_ASYNC_ENABLED=True)
+    @patch('marketplace.tasks.dispatch_webhook_delivery_task')
+    def test_dispatch_webhook_event_queues_async_task(self, mocked_task):
+        delivered = dispatch_webhook_event(
+            owner=self.owner,
+            event_type='request.status_changed',
+            payload={'request_id': 99, 'status': 'resolved'},
+        )
+
+        self.assertEqual(delivered, 1)
+        mocked_task.delay.assert_called_once_with(
+            self.endpoint.pk,
+            'request.status_changed',
+            {'request_id': 99, 'status': 'resolved'},
+        )
+
+    @override_settings(WEBHOOK_ASYNC_ENABLED=True)
+    @patch('marketplace.tasks.dispatch_webhook_delivery_task')
+    def test_dispatch_skips_unsubscribed_endpoint(self, mocked_task):
+        self.endpoint.subscribed_events = ['job.completed']
+        self.endpoint.save(update_fields=['subscribed_events'])
+
+        delivered = dispatch_webhook_event(
+            owner=self.owner,
+            event_type='request.status_changed',
+            payload={'request_id': 99},
+        )
+
+        self.assertEqual(delivered, 0)
+        mocked_task.delay.assert_not_called()

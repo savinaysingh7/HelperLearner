@@ -1,4 +1,5 @@
 from datetime import timedelta
+from unittest.mock import patch
 
 from django.core import mail
 from django.core.management import call_command
@@ -97,3 +98,21 @@ class EmailNotificationTests(TestCase):
         self.assertEqual(len(mail.outbox), 1)
         self.assertIn("expired and your KP was refunded", mail.outbox[0].subject)
         self.assertEqual(mail.outbox[0].to, ['poster@example.com'])
+
+    @override_settings(NOTIFICATION_EMAIL_ASYNC_ENABLED=True)
+    @patch('notifications.tasks.send_templated_email_task')
+    def test_claim_transition_queues_async_email_task_when_enabled(self, mocked_task):
+        help_request = HelpRequest.objects.create(
+            title='Need async claim mail',
+            description='Claim me',
+            user=self.poster,
+            skill_needed=self.skill,
+            kp_bounty=25,
+            status='open',
+        )
+
+        help_request.status = 'in_progress'
+        help_request.accepted_by = self.helper
+        help_request.save()
+
+        mocked_task.delay.assert_called_once()

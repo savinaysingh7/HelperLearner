@@ -1,6 +1,9 @@
+import logging
+
+from django.conf import settings
 from django.contrib import admin
 from django.db import transaction
-from django.utils import timezone
+from django.db.models import Q
 
 from accounts.models import CustomUser
 
@@ -45,6 +48,10 @@ from .models import (
     WorkspaceSprint,
     WorkspaceWalletEntry,
 )
+from .tasks import dispatch_webhook_delivery_task
+from .webhooks import RetryableWebhookDeliveryError, deliver_webhook_to_endpoint
+
+logger = logging.getLogger(__name__)
 
 
 @admin.register(Skill)
@@ -480,6 +487,55 @@ class WebhookDeliveryAdmin(admin.ModelAdmin):
     list_display = ('endpoint', 'event_type', 'status_code', 'succeeded', 'created_at')
     list_filter = ('succeeded', 'event_type')
     search_fields = ('endpoint__name', 'event_type', 'response_excerpt')
+    actions = ('requeue_failed_deliveries',)
+
+    @admin.action(description='Requeue selected retryable failed deliveries')
+    def requeue_failed_deliveries(self, request, queryset):
+        """Retry selected failed deliveries through Celery or synchronous fallback."""
+        retryable_qs = queryset.filter(succeeded=False).filter(
+            Q(status_code__isnull=True) | Q(status_code=429) | Q(status_code__gte=500)
+        ).select_related('endpoint')
+
+        processed = 0
+        skipped = 0
+        sync_retry_failures = 0
+        async_enabled = bool(getattr(settings, 'WEBHOOK_ASYNC_ENABLED', True))
+
+        for delivery in retryable_qs:
+            endpoint = delivery.endpoint
+            if not endpoint or not endpoint.is_active:
+                skipped += 1
+                continue
+
+            if async_enabled and hasattr(dispatch_webhook_delivery_task, 'delay'):
+                dispatch_webhook_delivery_task.delay(endpoint.pk, delivery.event_type, delivery.payload)
+                processed += 1
+                continue
+
+            try:
+                deliver_webhook_to_endpoint(
+                    endpoint_id=endpoint.pk,
+                    event_type=delivery.event_type,
+                    payload=delivery.payload,
+                    attempt=1,
+                )
+            except RetryableWebhookDeliveryError:
+                sync_retry_failures += 1
+                logger.warning(
+                    'Admin sync requeue retryable failure endpoint_id=%s event=%s delivery_id=%s',
+                    endpoint.pk,
+                    delivery.event_type,
+                    delivery.pk,
+                )
+            processed += 1
+
+        self.message_user(
+            request,
+            (
+                f'Requeue completed: processed={processed}, skipped={skipped}, '
+                f'sync_retry_failures={sync_retry_failures}, async={async_enabled}.'
+            ),
+        )
 
 
 @admin.register(ModerationFlag)

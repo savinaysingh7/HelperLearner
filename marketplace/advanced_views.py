@@ -1,13 +1,16 @@
 import logging
 from datetime import timedelta
 from decimal import Decimal
+from urllib.parse import urlsplit, urlunsplit
 
+from django.conf import settings
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required, user_passes_test
 from django.contrib.contenttypes.models import ContentType
 from django.db import transaction
 from django.db.models import Avg, Count, F, Sum
 from django.db.models.functions import TruncMonth
+from django.http import JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.utils import timezone
 from django.views.decorators.csrf import csrf_protect
@@ -56,6 +59,85 @@ from .realtime import emit_user_event
 from .webhooks import dispatch_webhook_event
 
 logger = logging.getLogger(__name__)
+
+
+def _mask_broker_url(raw_url):
+    """Mask credentials from broker URL for safe diagnostics output."""
+    if not raw_url:
+        return ''
+    try:
+        parsed = urlsplit(raw_url)
+        netloc = parsed.netloc
+        if '@' not in netloc:
+            return raw_url
+        creds, host = netloc.split('@', 1)
+        if ':' in creds:
+            username = creds.split(':', 1)[0]
+        else:
+            username = creds
+        masked_netloc = f'{username}:***@{host}'
+        return urlunsplit((parsed.scheme, masked_netloc, parsed.path, parsed.query, parsed.fragment))
+    except Exception:
+        return raw_url
+
+
+def _collect_celery_worker_snapshot():
+    """Collect celery worker availability and queue activity snapshot."""
+    from helperlearner_root.celery import celery_app
+
+    if celery_app is None:
+        return {
+            'healthy': False,
+            'configured': False,
+            'workers': [],
+            'totals': {'active': 0, 'reserved': 0, 'scheduled': 0},
+            'error': 'celery_not_configured',
+        }
+
+    try:
+        inspector = celery_app.control.inspect(timeout=settings.CELERY_MONITOR_TIMEOUT_SECONDS)
+        ping = inspector.ping() or {}
+        active = inspector.active() or {}
+        reserved = inspector.reserved() or {}
+        scheduled = inspector.scheduled() or {}
+    except Exception as exc:
+        return {
+            'healthy': False,
+            'configured': True,
+            'workers': [],
+            'totals': {'active': 0, 'reserved': 0, 'scheduled': 0},
+            'error': str(exc),
+        }
+
+    worker_names = sorted(set(list(ping.keys()) + list(active.keys()) + list(reserved.keys()) + list(scheduled.keys())))
+    workers = []
+    for name in worker_names:
+        workers.append(
+            {
+                'name': name,
+                'online': name in ping,
+                'active': len(active.get(name, [])),
+                'reserved': len(reserved.get(name, [])),
+                'scheduled': len(scheduled.get(name, [])),
+            }
+        )
+
+    total_active = sum(item['active'] for item in workers)
+    total_reserved = sum(item['reserved'] for item in workers)
+    total_scheduled = sum(item['scheduled'] for item in workers)
+    healthy = bool(workers and all(item['online'] for item in workers))
+
+    return {
+        'healthy': healthy,
+        'configured': True,
+        'workers': workers,
+        'totals': {
+            'active': total_active,
+            'reserved': total_reserved,
+            'scheduled': total_scheduled,
+        },
+        'error': '',
+    }
 
 
 def _completion_rate_for_user(user):
@@ -884,6 +966,68 @@ def advanced_analytics(request):
             'conversion': conversion,
         },
     )
+
+
+@login_required
+@user_passes_test(lambda user: user.is_staff)
+def ops_celery_status(request):
+    """Return staff-only Celery worker/queue status for ops monitoring."""
+    snapshot = _collect_celery_worker_snapshot()
+    status_code = 200 if snapshot['healthy'] else 503
+    payload = {
+        'status': 'healthy' if snapshot['healthy'] else 'degraded',
+        'service': 'celery',
+        'configured': snapshot['configured'],
+        'broker_url': _mask_broker_url(getattr(settings, 'CELERY_BROKER_URL', '')),
+        'workers': snapshot['workers'],
+        'totals': snapshot['totals'],
+        'error': snapshot.get('error') or '',
+        'checked_at': timezone.now().isoformat(),
+    }
+    return JsonResponse(payload, status=status_code)
+
+
+@login_required
+@user_passes_test(lambda user: user.is_staff)
+def ops_webhook_status(request):
+    """Return staff-only webhook delivery backlog and failure metrics."""
+    now = timezone.now()
+    hour_ago = now - timedelta(hours=1)
+    day_ago = now - timedelta(days=1)
+    threshold = int(getattr(settings, 'WEBHOOK_FAILURE_ALERT_THRESHOLD', 20))
+
+    failed_last_hour = WebhookDelivery.objects.filter(succeeded=False, created_at__gte=hour_ago).count()
+    failed_last_day = WebhookDelivery.objects.filter(succeeded=False, created_at__gte=day_ago).count()
+    delivered_last_hour = WebhookDelivery.objects.filter(succeeded=True, created_at__gte=hour_ago).count()
+
+    recent_failed = list(
+        WebhookDelivery.objects.filter(succeeded=False)
+        .select_related('endpoint')
+        .order_by('-created_at')[:10]
+        .values(
+            'id',
+            'endpoint_id',
+            'endpoint__name',
+            'event_type',
+            'status_code',
+            'created_at',
+        )
+    )
+    for item in recent_failed:
+        item['created_at'] = item['created_at'].isoformat()
+
+    degraded = failed_last_hour >= threshold
+    payload = {
+        'status': 'degraded' if degraded else 'healthy',
+        'service': 'webhooks',
+        'failed_last_hour': failed_last_hour,
+        'failed_last_day': failed_last_day,
+        'delivered_last_hour': delivered_last_hour,
+        'failure_alert_threshold': threshold,
+        'recent_failed_deliveries': recent_failed,
+        'checked_at': now.isoformat(),
+    }
+    return JsonResponse(payload, status=503 if degraded else 200)
 
 
 @login_required

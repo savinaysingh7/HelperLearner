@@ -70,6 +70,7 @@ Production reads SMTP settings from environment variables:
 - `EMAIL_HOST_PASSWORD`
 - `EMAIL_USE_TLS` (optional, defaults to `True`)
 - `DEFAULT_FROM_EMAIL` (optional, defaults to `no-reply@helperlearner.local`)
+- `NOTIFICATION_EMAIL_ASYNC_ENABLED` (optional, defaults to `True`; enqueue email sends through Celery with fallback)
 
 ## AI Assistant Setup (Gemini)
 Set the following environment variables:
@@ -112,11 +113,16 @@ Set:
 - `CELERY_RESULT_BACKEND`
 - `READINESS_CHECK_CELERY` (optional, default `False`; when `True`, `/readyz/` verifies broker reachability)
 - `READINESS_CHECK_CELERY_TIMEOUT_SECONDS` (optional, default `2`)
+- `WEBHOOK_ASYNC_ENABLED` (optional, default `True`)
+- `WEBHOOK_DELIVERY_TIMEOUT_SECONDS` (optional, default `5`)
+- `WEBHOOK_MAX_ATTEMPTS` (optional, default `3`; sync fallback retries)
 
 Background schedules are configured for:
 - request expiry
 - saved-search notifications
 - SLA engine checks
+
+Webhook deliveries now run through Celery task retries (exponential backoff + jitter) when async mode is enabled.
 
 Run worker:
 ```bash
@@ -161,6 +167,20 @@ Run SLA reminders and milestone auto-release rules:
 python manage.py run_sla_engine
 ```
 
+## Webhook Requeue Command
+Requeue recent retryable failed webhook deliveries:
+```bash
+python manage.py requeue_failed_webhooks
+```
+
+Useful flags:
+- `--dry-run` list candidates without enqueueing
+- `--minutes 180` choose lookback window
+- `--limit 500` cap batch size
+- `--event request.status_changed` filter by event type
+- `--endpoint-id 12` target one endpoint
+- `--sync` retry immediately without Celery queue
+
 ## Web Endpoints
 - `GET /healthz/` lightweight health check endpoint for uptime probes
 - `GET /readyz/` readiness probe (database + cache checks, optional Celery broker check)
@@ -189,6 +209,8 @@ python manage.py run_sla_engine
 - `GET,POST /integrations/` API key + webhook management
 - `GET /moderation/` moderation queue (staff)
 - `GET /analytics/advanced/` analytics dashboard (staff)
+- `GET /ops/celery/` staff-only Celery worker/queue health snapshot (JSON)
+- `GET /ops/webhooks/` staff-only webhook failure backlog snapshot (JSON)
 - `POST /post/assist/` AI draft improvement endpoint (login + CSRF required)
 - `GET /jobs/` paid freelance jobs discovery
 - `GET,POST /jobs/post/` create paid freelance job and fund escrow
@@ -239,6 +261,13 @@ Run the full test suite:
 python manage.py test
 ```
 
+Continuous Integration:
+- GitHub Actions workflow: `.github/workflows/ci.yml`
+- Runs on push/PR:
+  - `python manage.py check`
+  - `python manage.py makemigrations --check --dry-run`
+  - `python manage.py test`
+
 ## Demo Seeding
 Replace demo/seeded data with realistic Indian marketplace activity:
 ```bash
@@ -269,9 +298,30 @@ python manage.py seed_indian_demo_data --drop-superusers
    - hit `/readyz/` for DB/cache readiness (and broker readiness when `READINESS_CHECK_CELERY=True`)
 3. Scheduled workflows:
    - run Celery worker + beat or cron equivalents for `expire_requests`, `notify_saved_searches`, `run_sla_engine`
+   - requeue transient webhook failures when needed: `python manage.py requeue_failed_webhooks --minutes 240`
 4. Incident baseline:
    - use `X-Request-ID` from responses/logs for traceability
    - inspect `server_log.txt` and Sentry events for stack traces
 5. Rollback safety:
    - maintain DB backups before deploy
    - revert app release and run forward-only migration strategy
+
+## Backup / Restore Drill (PostgreSQL)
+Run this monthly on staging to verify disaster recovery:
+
+1. Backup:
+```bash
+pg_dump "$DATABASE_URL" --format=custom --file=backup.dump
+```
+
+2. Restore to a fresh database:
+```bash
+createdb helperlearner_restore
+pg_restore --no-owner --no-privileges --dbname=helperlearner_restore backup.dump
+```
+
+3. Point app temporarily to restored DB and validate:
+```bash
+DATABASE_URL=postgresql://.../helperlearner_restore python manage.py check
+DATABASE_URL=postgresql://.../helperlearner_restore python manage.py test marketplace.tests_extra
+```

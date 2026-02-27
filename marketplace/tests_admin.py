@@ -1,13 +1,15 @@
+from unittest.mock import patch
+
 from django.contrib.admin.sites import AdminSite
-from django.test import RequestFactory, TestCase
+from django.test import RequestFactory, TestCase, override_settings
 
 from accounts.admin import CustomUserAdmin
 from accounts.models import CustomUser
 from notifications.admin import NotificationAdmin
 from notifications.models import Notification
 
-from .admin import HelpRequestAdmin
-from .models import HelpRequest, Rating, Skill
+from .admin import HelpRequestAdmin, WebhookDeliveryAdmin
+from .models import HelpRequest, Rating, Skill, WebhookDelivery, WebhookEndpoint
 
 
 class CustomAdminFeatureTests(TestCase):
@@ -102,3 +104,89 @@ class CustomAdminFeatureTests(TestCase):
         admin_obj = CustomUserAdmin(CustomUser, self.site)
         helper_obj = admin_obj.get_queryset(self._admin_request()).get(pk=self.helper.pk)
         self.assertEqual(admin_obj.avg_rating_display(helper_obj), 4.0)
+
+    @override_settings(WEBHOOK_ASYNC_ENABLED=True)
+    @patch('marketplace.admin.dispatch_webhook_delivery_task')
+    def test_webhook_delivery_admin_requeue_enqueues_retryable_failures(self, mocked_task):
+        endpoint = WebhookEndpoint.objects.create(
+            user=self.poster,
+            name='Primary webhook',
+            url='https://example.com/hook',
+            is_active=True,
+        )
+        delivery = WebhookDelivery.objects.create(
+            endpoint=endpoint,
+            event_type='request.status_changed',
+            payload={'request_id': 51},
+            status_code=503,
+            succeeded=False,
+        )
+
+        admin_obj = WebhookDeliveryAdmin(WebhookDelivery, self.site)
+        admin_obj.message_user = lambda *args, **kwargs: None
+        admin_obj.requeue_failed_deliveries(
+            self._admin_request(),
+            WebhookDelivery.objects.filter(pk=delivery.pk),
+        )
+
+        mocked_task.delay.assert_called_once_with(
+            endpoint.pk,
+            'request.status_changed',
+            {'request_id': 51},
+        )
+
+    @patch('marketplace.admin.dispatch_webhook_delivery_task')
+    def test_webhook_delivery_admin_requeue_skips_non_retryable_rows(self, mocked_task):
+        endpoint = WebhookEndpoint.objects.create(
+            user=self.poster,
+            name='Secondary webhook',
+            url='https://example.com/hook-2',
+            is_active=True,
+        )
+        delivery = WebhookDelivery.objects.create(
+            endpoint=endpoint,
+            event_type='request.status_changed',
+            payload={'request_id': 77},
+            status_code=400,
+            succeeded=False,
+        )
+
+        admin_obj = WebhookDeliveryAdmin(WebhookDelivery, self.site)
+        admin_obj.message_user = lambda *args, **kwargs: None
+        admin_obj.requeue_failed_deliveries(
+            self._admin_request(),
+            WebhookDelivery.objects.filter(pk=delivery.pk),
+        )
+
+        mocked_task.delay.assert_not_called()
+
+    @override_settings(WEBHOOK_ASYNC_ENABLED=False)
+    @patch('marketplace.admin.deliver_webhook_to_endpoint', return_value={'ok': True, 'skipped': False})
+    def test_webhook_delivery_admin_requeue_uses_sync_fallback_when_async_disabled(self, mocked_deliver):
+        endpoint = WebhookEndpoint.objects.create(
+            user=self.poster,
+            name='Sync webhook',
+            url='https://example.com/hook-sync',
+            is_active=True,
+        )
+        delivery = WebhookDelivery.objects.create(
+            endpoint=endpoint,
+            event_type='request.status_changed',
+            payload={'request_id': 99},
+            status_code=503,
+            succeeded=False,
+        )
+
+        admin_obj = WebhookDeliveryAdmin(WebhookDelivery, self.site)
+        admin_obj.message_user = lambda *args, **kwargs: None
+        admin_obj.requeue_failed_deliveries(
+            self._admin_request(),
+            WebhookDelivery.objects.filter(pk=delivery.pk),
+        )
+
+        mocked_deliver.assert_called_once_with(
+            endpoint_id=endpoint.pk,
+            event_type='request.status_changed',
+            payload={'request_id': 99},
+            attempt=1,
+        )

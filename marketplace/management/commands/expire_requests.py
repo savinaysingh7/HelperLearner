@@ -1,16 +1,13 @@
 import logging
 
-from django.conf import settings
-from django.core.mail import send_mail
 from django.core.management.base import BaseCommand
 from django.db import transaction
-from django.template.loader import render_to_string
 from django.urls import reverse
 from django.utils import timezone
-from django.utils.html import strip_tags
 
 from accounts.models import CustomUser
 from marketplace.models import HelpRequest
+from notifications.emailing import send_templated_email
 from notifications.models import Notification
 from notifications.utils import allows_email, allows_in_app
 
@@ -52,25 +49,15 @@ class Command(BaseCommand):
                         link=reverse('request_detail', args=[help_request.pk]),
                     )
 
-                try:
-                    if poster.email and allows_email(poster):
-                        html_body = render_to_string(
-                            'emails/expiry_notification.html',
-                            {'request_obj': help_request, 'poster': poster},
-                        )
-                        send_mail(
-                            subject=f"Your request '{help_request.title}' expired and your KP was refunded.",
-                            message=strip_tags(html_body),
-                            from_email=getattr(settings, 'DEFAULT_FROM_EMAIL', None),
-                            recipient_list=[poster.email],
-                            html_message=html_body,
-                            fail_silently=False,
-                        )
-                except Exception:
-                    logger.exception(
-                        'Failed to send expiry email for request=%s user=%s',
-                        help_request.pk,
-                        poster.username,
+                if poster.email and allows_email(poster):
+                    send_templated_email(
+                        subject=f"Your request '{help_request.title}' expired and your KP was refunded.",
+                        template_name='emails/expiry_notification.html',
+                        context={
+                            'request_obj': {'title': help_request.title, 'kp_bounty': help_request.kp_bounty},
+                            'poster': {'username': poster.username},
+                        },
+                        recipient_email=poster.email,
                     )
 
                 logger.info(
