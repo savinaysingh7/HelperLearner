@@ -111,6 +111,32 @@ class HealthCheckTests(TestCase):
         self.assertEqual(response.json(), {'status': 'ok', 'service': 'helperlearner'})
 
 
+class ReadinessCheckTests(TestCase):
+    def test_readiness_check_endpoint_returns_ready(self):
+        response = self.client.get(reverse('readiness_check'))
+
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        self.assertEqual(payload.get('status'), 'ready')
+        self.assertTrue(payload['checks']['database'])
+        self.assertTrue(payload['checks']['cache'])
+
+
+class RequestObservabilityTests(TestCase):
+    def test_response_includes_request_id_and_timing_headers(self):
+        response = self.client.get(reverse('home'))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertIn('X-Request-ID', response.headers)
+        self.assertIn('X-Response-Time-ms', response.headers)
+
+    def test_request_id_header_is_echoed_when_provided(self):
+        response = self.client.get(reverse('home'), HTTP_X_REQUEST_ID='hl-test-id-001')
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.headers.get('X-Request-ID'), 'hl-test-id-001')
+
+
 class CsrfProtectionTests(TestCase):
     def setUp(self):
         self.client = Client(enforce_csrf_checks=True)

@@ -1,7 +1,7 @@
 from django.urls import include, path
 from rest_framework.routers import DefaultRouter
 
-from . import advanced_views, views
+from . import advanced_views, chat_views, jira_views, views
 
 router = DefaultRouter()
 router.register(r'requests', views.HelpRequestViewSet, basename='request')
@@ -13,6 +13,8 @@ urlpatterns = [
     path('', views.home, name='home'),
     path('browse/', views.request_list, name='request_list'),
     path('search/', views.unified_search, name='search'),
+    path('chat/', chat_views.chat_inbox, name='chat_inbox'),
+    path('chat/thread/<int:thread_id>/', chat_views.chat_thread_detail, name='chat_thread_detail'),
     path('feed/', views.activity_feed, name='activity_feed'),
     path('saved-searches/', views.saved_searches, name='saved_searches'),
     path('saved-searches/save-current/', views.save_current_search, name='save_current_search'),
@@ -26,6 +28,7 @@ urlpatterns = [
     path('jobs/<int:pk>/proposals/<int:proposal_id>/select/', views.select_job_proposal, name='select_job_proposal'),
     path('jobs/<int:pk>/proposals/compare/', advanced_views.compare_job_proposals, name='compare_job_proposals'),
     path('jobs/<int:pk>/proposals/withdraw/', views.withdraw_job_proposal, name='withdraw_job_proposal'),
+    path('jobs/<int:pk>/chat/', chat_views.job_chat, name='job_chat'),
     path('jobs/<int:pk>/claim/', views.claim_freelance_job, name='claim_freelance_job'),
     path('jobs/<int:pk>/milestones/add/', views.add_job_milestone, name='add_job_milestone'),
     path('jobs/<int:pk>/milestones/<int:milestone_id>/submit/', views.submit_job_milestone, name='submit_job_milestone'),
@@ -48,6 +51,7 @@ urlpatterns = [
     path('request/<int:pk>/proposals/<int:proposal_id>/select/', views.select_request_proposal, name='select_request_proposal'),
     path('request/<int:pk>/proposals/compare/', advanced_views.compare_request_proposals, name='compare_request_proposals'),
     path('request/<int:pk>/proposals/withdraw/', views.withdraw_request_proposal, name='withdraw_request_proposal'),
+    path('request/<int:pk>/chat/', chat_views.request_chat, name='request_chat'),
     path('request/<int:pk>/claim/', views.claim_request, name='claim_request'),
     path('request/<int:pk>/resolve/', views.resolve_request, name='resolve_request'),
     path('request/<int:pk>/cancel/', views.cancel_request, name='cancel_request'),
@@ -58,6 +62,33 @@ urlpatterns = [
     path('portfolio/<int:item_id>/delete/', advanced_views.delete_portfolio_item, name='delete_portfolio_item'),
     path('workspaces/', advanced_views.workspace_list, name='workspace_list'),
     path('workspaces/<slug:slug>/', advanced_views.workspace_detail, name='workspace_detail'),
+    path('workspaces/<slug:slug>/chat/', chat_views.workspace_chat, name='workspace_chat'),
+    path('workspaces/<slug:slug>/projects/', jira_views.workspace_projects, name='workspace_projects'),
+    path(
+        'workspaces/<slug:slug>/projects/<int:project_id>/',
+        jira_views.workspace_project_board,
+        name='workspace_project_board',
+    ),
+    path(
+        'workspaces/<slug:slug>/projects/<int:project_id>/issues/new/',
+        jira_views.workspace_issue_create,
+        name='workspace_issue_create',
+    ),
+    path(
+        'workspaces/<slug:slug>/projects/<int:project_id>/issues/<int:issue_id>/',
+        jira_views.workspace_issue_detail,
+        name='workspace_issue_detail',
+    ),
+    path(
+        'workspaces/<slug:slug>/projects/<int:project_id>/issues/<int:issue_id>/edit/',
+        jira_views.workspace_issue_edit,
+        name='workspace_issue_edit',
+    ),
+    path(
+        'workspaces/<slug:slug>/projects/<int:project_id>/issues/<int:issue_id>/transition/',
+        jira_views.workspace_issue_transition,
+        name='workspace_issue_transition',
+    ),
     path('workspaces/<slug:slug>/invite/', advanced_views.workspace_invite_member, name='workspace_invite_member'),
     path('workspaces/<slug:slug>/deposit/', advanced_views.workspace_deposit, name='workspace_deposit'),
     path('workspaces/<slug:slug>/withdraw/', advanced_views.workspace_withdraw, name='workspace_withdraw'),

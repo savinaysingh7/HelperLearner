@@ -1,0 +1,77 @@
+{% extends 'base.html' %}
+{% load discovery_tags %}
+
+{% block title %}{{ project.name }} Board{% endblock %}
+
+{% block content %}
+<section class="page-head d-flex flex-column flex-md-row justify-content-between align-items-md-center gap-2">
+    <div>
+        <span class="eyebrow"><i class="bi bi-kanban-fill"></i>Project Board</span>
+        <h1 class="h3 mb-1">{{ project.name }} <span class="text-muted">({{ project.key }})</span></h1>
+        <p class="text-muted mb-0">{{ project.description|default:'No description provided.' }}</p>
+    </div>
+    <div class="d-flex flex-wrap gap-2">
+        <a href="{% url 'workspace_issue_create' workspace.slug project.pk %}" class="btn btn-primary btn-sm">New Issue</a>
+        <a href="{% url 'workspace_projects' workspace.slug %}" class="btn btn-outline-secondary btn-sm">All Projects</a>
+    </div>
+</section>
+
+<div class="kanban-grid mb-3">
+    {% for status_key, status_label in status_columns %}
+        <section class="card kanban-column">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <span class="fw-semibold">{{ status_label }}</span>
+                <span class="badge text-bg-secondary">{{ board|get_item:status_key|length }}</span>
+            </div>
+            <div class="card-body">
+                {% for issue in board|get_item:status_key %}
+                    <article class="kanban-card mb-2">
+                        <div class="d-flex justify-content-between gap-2">
+                            <a href="{% url 'workspace_issue_detail' workspace.slug project.pk issue.pk %}" class="fw-semibold text-decoration-none">
+                                {{ issue.issue_key }}
+                            </a>
+                            <span class="badge issue-priority issue-priority-{{ issue.priority }}">{{ issue.get_priority_display }}</span>
+                        </div>
+                        <p class="small mt-2 mb-1">{{ issue.title }}</p>
+                        <div class="small text-muted">
+                            {% if issue.assignee %}
+                                Assignee: {{ issue.assignee.username }}
+                            {% else %}
+                                Unassigned
+                            {% endif %}
+                        </div>
+                        {% if issue.due_date %}
+                            <div class="small text-muted">Due: {{ issue.due_date }}</div>
+                        {% endif %}
+                    </article>
+                {% empty %}
+                    <div class="text-muted small">No issues.</div>
+                {% endfor %}
+            </div>
+        </section>
+    {% endfor %}
+</div>
+
+<div class="card">
+    <div class="card-header fw-semibold">Recent Activity</div>
+    <ul class="list-group list-group-flush">
+        {% for item in recent_activity %}
+            <li class="list-group-item d-flex justify-content-between align-items-start gap-2">
+                <div class="small">
+                    <strong>{{ item.issue.issue_key }}</strong>
+                    <span class="text-muted">{{ item.action|capfirst }}</span>
+                    {% if item.from_value or item.to_value %}
+                        <span class="text-muted">({{ item.from_value|default:'-' }} &rarr; {{ item.to_value|default:'-' }})</span>
+                    {% endif %}
+                    {% if item.actor %}
+                        <div class="text-muted">by {{ item.actor.username }}</div>
+                    {% endif %}
+                </div>
+                <small class="text-muted text-nowrap">{{ item.created_at|timesince }} ago</small>
+            </li>
+        {% empty %}
+            <li class="list-group-item text-muted">No activity yet.</li>
+        {% endfor %}
+    </ul>
+</div>
+{% endblock %}

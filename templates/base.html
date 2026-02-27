@@ -117,6 +117,16 @@
                                     </ul>
                                 </div>
                                 <a
+                                    href="{% url 'chat_inbox' %}"
+                                    class="btn btn-outline-light btn-sm nav-icon-btn position-relative {% if current_name == 'chat_inbox' or current_name == 'chat_thread_detail' %}active{% endif %}"
+                                    aria-label="Chats"
+                                >
+                                    <i class="bi bi-chat-dots"></i>
+                                    <span id="chatBadge" class="badge rounded-pill bg-info text-dark nav-badge {% if not unread_chat_threads_count %}d-none{% endif %}" data-count="{{ unread_chat_threads_count|default:0 }}">
+                                        {% if unread_chat_threads_count > 99 %}99+{% else %}{{ unread_chat_threads_count|default:0 }}{% endif %}
+                                    </span>
+                                </a>
+                                <a
                                     href="{% url 'notification_list' %}"
                                     class="btn btn-outline-light btn-sm nav-icon-btn position-relative {% if current_name == 'notification_list' %}active{% endif %}"
                                     aria-label="Notifications"
@@ -274,20 +284,35 @@
                     } catch (error) {
                         return;
                     }
-                    if (payload.event !== "notification.created" && payload.event !== "kp.received") {
+                    var isNotificationEvent = payload.event === "notification.created" || payload.event === "kp.received";
+                    var isChatEvent = payload.event === "chat.message";
+                    if (!isNotificationEvent && !isChatEvent) {
                         return;
                     }
 
-                    var badge = document.getElementById("notificationBadge");
-                    if (badge) {
-                        var count = parseInt(badge.dataset.count || "0", 10) + 1;
-                        badge.dataset.count = String(count);
-                        badge.textContent = count > 99 ? "99+" : String(count);
-                        badge.classList.remove("d-none");
+                    if (isNotificationEvent) {
+                        var notificationBadge = document.getElementById("notificationBadge");
+                        if (notificationBadge) {
+                            var notificationCount = parseInt(notificationBadge.dataset.count || "0", 10) + 1;
+                            notificationBadge.dataset.count = String(notificationCount);
+                            notificationBadge.textContent = notificationCount > 99 ? "99+" : String(notificationCount);
+                            notificationBadge.classList.remove("d-none");
+                        }
+                    }
+
+                    if (isChatEvent) {
+                        var chatBadge = document.getElementById("chatBadge");
+                        if (chatBadge) {
+                            var chatCount = parseInt(chatBadge.dataset.count || "0", 10) + 1;
+                            chatBadge.dataset.count = String(chatCount);
+                            chatBadge.textContent = chatCount > 99 ? "99+" : String(chatCount);
+                            chatBadge.classList.remove("d-none");
+                        }
                     }
 
                     if ("Notification" in window && Notification.permission === "granted" && payload.payload && payload.payload.message) {
-                        new Notification("HelperLearner", { body: payload.payload.message });
+                        var title = isChatEvent ? "New chat message" : "HelperLearner";
+                        new Notification(title, { body: payload.payload.message });
                     }
                 };
             })();

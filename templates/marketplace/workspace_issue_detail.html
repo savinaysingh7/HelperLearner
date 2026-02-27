@@ -1,0 +1,98 @@
+{% extends 'base.html' %}
+
+{% block title %}{{ issue.issue_key }} | {{ issue.title }}{% endblock %}
+
+{% block content %}
+<section class="page-head d-flex flex-column flex-md-row justify-content-between align-items-md-center gap-2">
+    <div>
+        <span class="eyebrow"><i class="bi bi-ticket-perforated"></i>{{ issue.issue_key }}</span>
+        <h1 class="h3 mb-1">{{ issue.title }}</h1>
+        <p class="text-muted mb-0">{{ project.name }} · {{ workspace.name }}</p>
+    </div>
+    <div class="d-flex flex-wrap gap-2">
+        {% if can_edit %}
+            <a href="{% url 'workspace_issue_edit' workspace.slug project.pk issue.pk %}" class="btn btn-outline-primary btn-sm">Edit Issue</a>
+        {% endif %}
+        <a href="{% url 'workspace_project_board' workspace.slug project.pk %}" class="btn btn-outline-secondary btn-sm">Back to Board</a>
+    </div>
+</section>
+
+<div class="row g-3">
+    <div class="col-12 col-lg-8">
+        <div class="card">
+            <div class="card-body">
+                <div class="d-flex flex-wrap gap-2 mb-3">
+                    <span class="badge text-bg-secondary">{{ issue.get_status_display }}</span>
+                    <span class="badge issue-priority issue-priority-{{ issue.priority }}">{{ issue.get_priority_display }}</span>
+                    {% if issue.estimate_points %}
+                        <span class="badge text-bg-info-subtle border">{{ issue.estimate_points }} pts</span>
+                    {% endif %}
+                </div>
+                <p class="mb-0">{{ issue.description|default:'No description provided.' }}</p>
+            </div>
+        </div>
+
+        <div class="card mt-3">
+            <div class="card-header fw-semibold">Transition Status</div>
+            <div class="card-body d-flex flex-wrap gap-2">
+                {% for key, label in issue.STATUS_CHOICES %}
+                    <form method="post" action="{% url 'workspace_issue_transition' workspace.slug project.pk issue.pk %}">
+                        {% csrf_token %}
+                        <input type="hidden" name="status" value="{{ key }}">
+                        <button type="submit" class="btn btn-sm {% if issue.status == key %}btn-primary{% else %}btn-outline-light{% endif %}">
+                            {{ label }}
+                        </button>
+                    </form>
+                {% endfor %}
+            </div>
+        </div>
+
+        <div class="card mt-3">
+            <div class="card-header fw-semibold">Activity</div>
+            <ul class="list-group list-group-flush">
+                {% for item in activities %}
+                    <li class="list-group-item d-flex justify-content-between align-items-start gap-2">
+                        <div class="small">
+                            <span class="fw-semibold">{{ item.action|capfirst }}</span>
+                            {% if item.from_value or item.to_value %}
+                                <span class="text-muted">{{ item.from_value|default:'-' }} &rarr; {{ item.to_value|default:'-' }}</span>
+                            {% endif %}
+                            {% if item.actor %}
+                                <div class="text-muted">by {{ item.actor.username }}</div>
+                            {% endif %}
+                            {% if item.note %}
+                                <div class="text-muted">{{ item.note }}</div>
+                            {% endif %}
+                        </div>
+                        <small class="text-muted text-nowrap">{{ item.created_at|timesince }} ago</small>
+                    </li>
+                {% empty %}
+                    <li class="list-group-item text-muted">No activity yet.</li>
+                {% endfor %}
+            </ul>
+        </div>
+    </div>
+
+    <div class="col-12 col-lg-4">
+        <div class="card">
+            <div class="card-header fw-semibold">Issue Meta</div>
+            <div class="card-body small">
+                <div class="mb-2"><strong>Reporter:</strong> {{ issue.reporter.username }}</div>
+                <div class="mb-2">
+                    <strong>Assignee:</strong>
+                    {% if issue.assignee %}{{ issue.assignee.username }}{% else %}<span class="text-muted">Unassigned</span>{% endif %}
+                </div>
+                <div class="mb-2">
+                    <strong>Due:</strong>
+                    {% if issue.due_date %}{{ issue.due_date }}{% else %}<span class="text-muted">Not set</span>{% endif %}
+                </div>
+                <div class="mb-2"><strong>Created:</strong> {{ issue.created_at|date:'Y-m-d H:i' }}</div>
+                <div class="mb-2"><strong>Updated:</strong> {{ issue.updated_at|date:'Y-m-d H:i' }}</div>
+                {% if issue.resolved_at %}
+                    <div><strong>Resolved:</strong> {{ issue.resolved_at|date:'Y-m-d H:i' }}</div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

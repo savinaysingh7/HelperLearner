@@ -1,0 +1,71 @@
+{% extends 'base.html' %}
+
+{% block title %}
+    {% if form_mode == 'edit' %}Edit Issue{% else %}Create Issue{% endif %}
+{% endblock %}
+
+{% block content %}
+<section class="page-head d-flex flex-column flex-md-row justify-content-between align-items-md-center gap-2">
+    <div>
+        <span class="eyebrow"><i class="bi bi-ticket-detailed"></i>Issue</span>
+        <h1 class="h3 mb-1">
+            {% if form_mode == 'edit' %}
+                Edit {{ issue.issue_key }}
+            {% else %}
+                New Issue in {{ project.key }}
+            {% endif %}
+        </h1>
+        <p class="text-muted mb-0">{{ project.name }} · {{ workspace.name }}</p>
+    </div>
+    <div class="d-flex gap-2">
+        <a href="{% url 'workspace_project_board' workspace.slug project.pk %}" class="btn btn-outline-secondary btn-sm">Back to Board</a>
+    </div>
+</section>
+
+<div class="card">
+    <div class="card-body">
+        <form method="post" class="row g-3">
+            {% csrf_token %}
+            <div class="col-12">
+                <label class="form-label" for="{{ form.title.id_for_label }}">Title</label>
+                {{ form.title }}
+                {% for error in form.title.errors %}
+                    <div class="text-danger small">{{ error }}</div>
+                {% endfor %}
+            </div>
+            <div class="col-12">
+                <label class="form-label" for="{{ form.description.id_for_label }}">Description</label>
+                {{ form.description }}
+                {% for error in form.description.errors %}
+                    <div class="text-danger small">{{ error }}</div>
+                {% endfor %}
+            </div>
+            <div class="col-12 col-md-4">
+                <label class="form-label" for="{{ form.status.id_for_label }}">Status</label>
+                {{ form.status }}
+            </div>
+            <div class="col-12 col-md-4">
+                <label class="form-label" for="{{ form.priority.id_for_label }}">Priority</label>
+                {{ form.priority }}
+            </div>
+            <div class="col-12 col-md-4">
+                <label class="form-label" for="{{ form.assignee.id_for_label }}">Assignee</label>
+                {{ form.assignee }}
+            </div>
+            <div class="col-12 col-md-4">
+                <label class="form-label" for="{{ form.estimate_points.id_for_label }}">Estimate (points)</label>
+                {{ form.estimate_points }}
+            </div>
+            <div class="col-12 col-md-4">
+                <label class="form-label" for="{{ form.due_date.id_for_label }}">Due date</label>
+                {{ form.due_date }}
+            </div>
+            <div class="col-12">
+                <button type="submit" class="btn btn-primary">
+                    {% if form_mode == 'edit' %}Save Changes{% else %}Create Issue{% endif %}
+                </button>
+            </div>
+        </form>
+    </div>
+</div>
+{% endblock %}

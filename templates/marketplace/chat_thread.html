@@ -1,0 +1,74 @@
+{% extends 'base.html' %}
+
+{% block title %}{{ thread.display_title }} | Chat{% endblock %}
+
+{% block content %}
+<section class="page-head d-flex flex-column flex-md-row justify-content-between align-items-md-center gap-2">
+    <div>
+        <span class="eyebrow"><i class="bi bi-chat-left-text"></i>Conversation</span>
+        <h1 class="h3 mb-1">{{ thread.display_title }}</h1>
+        <p class="text-muted mb-0">
+            Participants:
+            {% for item in participants %}
+                <span class="me-1">{{ item.user.username }}{% if not forloop.last %},{% endif %}</span>
+            {% endfor %}
+        </p>
+    </div>
+    <div class="d-flex gap-2">
+        {% if origin_url %}
+            <a href="{{ origin_url }}" class="btn btn-outline-secondary btn-sm">{{ origin_label }}</a>
+        {% endif %}
+        <a href="{% url 'chat_inbox' %}" class="btn btn-outline-light btn-sm">Back to Inbox</a>
+    </div>
+</section>
+
+<div class="card">
+    <div class="card-body p-0">
+        <div id="chatScrollRegion" class="chat-thread-window p-3 p-lg-4">
+            {% for chat_message in chat_messages %}
+                <div class="chat-message-row {% if chat_message.sender_id == user.id %}is-self{% endif %}">
+                    <div class="chat-bubble">
+                        <div class="chat-meta">
+                            <span class="fw-semibold">{{ chat_message.sender.username }}</span>
+                            <small class="text-muted">{{ chat_message.created_at|date:'M d, H:i' }}</small>
+                        </div>
+                        <div class="chat-content">{{ chat_message.content|linebreaksbr }}</div>
+                    </div>
+                </div>
+            {% empty %}
+                <div class="empty-state text-center py-5">
+                    <div class="icon"><i class="bi bi-chat-square-text"></i></div>
+                    <h2 class="h5 mt-2">No messages yet</h2>
+                    <p class="text-muted mb-0">Say hello and start collaboration.</p>
+                </div>
+            {% endfor %}
+        </div>
+        <div class="chat-composer border-top p-3">
+            <form method="post" class="row g-2 align-items-end">
+                {% csrf_token %}
+                <div class="col-12 col-md">
+                    <label class="form-label mb-1" for="{{ form.content.id_for_label }}">Message</label>
+                    {{ form.content }}
+                    {% for error in form.content.errors %}
+                        <div class="text-danger small mt-1">{{ error }}</div>
+                    {% endfor %}
+                </div>
+                <div class="col-12 col-md-auto">
+                    <button type="submit" class="btn btn-primary w-100">Send</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    (function () {
+        var region = document.getElementById("chatScrollRegion");
+        if (region) {
+            region.scrollTop = region.scrollHeight;
+        }
+    })();
+</script>
+{% endblock %}

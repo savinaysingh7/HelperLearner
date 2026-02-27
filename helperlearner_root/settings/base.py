@@ -1,4 +1,5 @@
 """Base settings shared by all environments."""
+import logging
 from pathlib import Path
 import sys
 
@@ -6,6 +7,7 @@ import dj_database_url
 from decouple import config
 
 BASE_DIR = Path(__file__).resolve().parent.parent.parent
+logger = logging.getLogger(__name__)
 
 SECRET_KEY = config("SECRET_KEY", default="unsafe-secret-for-dev")
 DEBUG = config("DEBUG", default=False, cast=bool)
@@ -35,6 +37,7 @@ MIDDLEWARE = [
     "whitenoise.middleware.WhiteNoiseMiddleware",
     "django.contrib.sessions.middleware.SessionMiddleware",
     "django.middleware.common.CommonMiddleware",
+    "helperlearner_root.middleware.RequestMetricsMiddleware",
     "django.middleware.csrf.CsrfViewMiddleware",
     "django.contrib.auth.middleware.AuthenticationMiddleware",
     "helperlearner_root.middleware.ExperimentAssignmentMiddleware",
@@ -58,6 +61,7 @@ TEMPLATES = [
                 "django.contrib.messages.context_processors.messages",
                 "notifications.context_processors.unread_notifications_count",
                 "marketplace.context_processors.active_experiments",
+                "marketplace.context_processors.unread_chat_threads_count",
             ],
         },
     },
@@ -124,6 +128,45 @@ REST_FRAMEWORK = {
     ],
 }
 
+REDIS_URL = config("REDIS_URL", default="").strip()
+CACHE_LOCATION = config("CACHE_LOCATION", default="helperlearner-cache")
+CACHE_BACKEND = config("CACHE_BACKEND", default="").strip()
+
+if not CACHE_BACKEND and REDIS_URL:
+    try:  # pragma: no cover - optional dependency
+        import django_redis  # noqa: F401
+
+        CACHE_BACKEND = "django_redis.cache.RedisCache"
+    except Exception:
+        CACHE_BACKEND = "django.core.cache.backends.locmem.LocMemCache"
+        logger.warning("REDIS_URL is set but django-redis is unavailable; falling back to LocMem cache.")
+
+if not CACHE_BACKEND:
+    CACHE_BACKEND = "django.core.cache.backends.locmem.LocMemCache"
+
+if CACHE_BACKEND == "django_redis.cache.RedisCache" and not REDIS_URL:
+    logger.warning("CACHE_BACKEND is django_redis.cache.RedisCache but REDIS_URL is empty; using LocMem cache.")
+    CACHE_BACKEND = "django.core.cache.backends.locmem.LocMemCache"
+
+if CACHE_BACKEND == "django_redis.cache.RedisCache":
+    CACHES = {
+        "default": {
+            "BACKEND": CACHE_BACKEND,
+            "LOCATION": REDIS_URL,
+            "OPTIONS": {
+                "CLIENT_CLASS": "django_redis.client.DefaultClient",
+            },
+            "KEY_PREFIX": "helperlearner",
+        }
+    }
+else:
+    CACHES = {
+        "default": {
+            "BACKEND": CACHE_BACKEND,
+            "LOCATION": CACHE_LOCATION,
+        }
+    }
+
 LANGUAGE_CODE = "en-us"
 TIME_ZONE = "UTC"
 USE_I18N = True
@@ -142,6 +185,43 @@ LOGOUT_REDIRECT_URL = "home"
 DEFAULT_FROM_EMAIL = config("DEFAULT_FROM_EMAIL", default="no-reply@helperlearner.local")
 GEMINI_API_KEY = config("GEMINI_API_KEY", default="")
 GEMINI_MODEL = config("GEMINI_MODEL", default="gemini-flash-latest")
+AI_SUMMARY_ENABLED = config("AI_SUMMARY_ENABLED", default=True, cast=bool)
+AI_HTTP_RETRY_ATTEMPTS = config("AI_HTTP_RETRY_ATTEMPTS", default=2, cast=int)
+AI_HTTP_RETRY_BASE_DELAY_SECONDS = config("AI_HTTP_RETRY_BASE_DELAY_SECONDS", default=0.4, cast=float)
+AI_ASSIST_TIMEOUT_SECONDS = config("AI_ASSIST_TIMEOUT_SECONDS", default=20, cast=int)
+AI_SUMMARY_TIMEOUT_SECONDS = config("AI_SUMMARY_TIMEOUT_SECONDS", default=10, cast=int)
+AI_REQUEST_ASSIST_CACHE_SECONDS = config("AI_REQUEST_ASSIST_CACHE_SECONDS", default=600, cast=int)
+AI_SUMMARY_CACHE_SECONDS = config("AI_SUMMARY_CACHE_SECONDS", default=3600, cast=int)
+PUBLIC_STATS_CACHE_SECONDS = config("PUBLIC_STATS_CACHE_SECONDS", default=45, cast=int)
+SLOW_REQUEST_THRESHOLD_MS = config("SLOW_REQUEST_THRESHOLD_MS", default=900, cast=int)
+
+CELERY_BROKER_URL = config("CELERY_BROKER_URL", default=REDIS_URL or "redis://127.0.0.1:6379/0")
+CELERY_RESULT_BACKEND = config("CELERY_RESULT_BACKEND", default=CELERY_BROKER_URL)
+CELERY_TASK_ALWAYS_EAGER = config("CELERY_TASK_ALWAYS_EAGER", default=False, cast=bool)
+CELERY_TASK_EAGER_PROPAGATES = config("CELERY_TASK_EAGER_PROPAGATES", default=True, cast=bool)
+CELERY_ACCEPT_CONTENT = ["json"]
+CELERY_TASK_SERIALIZER = "json"
+CELERY_RESULT_SERIALIZER = "json"
+CELERY_TIMEZONE = TIME_ZONE
+CELERY_BEAT_SCHEDULE = {
+    "expire-open-requests-hourly": {
+        "task": "marketplace.tasks.expire_open_requests_task",
+        "schedule": config("CELERY_SCHEDULE_EXPIRE_SECONDS", default=3600, cast=int),
+    },
+    "notify-saved-searches-5min": {
+        "task": "marketplace.tasks.notify_saved_searches_task",
+        "schedule": config("CELERY_SCHEDULE_NOTIFY_SECONDS", default=300, cast=int),
+    },
+    "run-sla-engine-10min": {
+        "task": "marketplace.tasks.run_sla_engine_task",
+        "schedule": config("CELERY_SCHEDULE_SLA_SECONDS", default=600, cast=int),
+    },
+}
+
+SENTRY_DSN = config("SENTRY_DSN", default="")
+SENTRY_ENVIRONMENT = config("SENTRY_ENVIRONMENT", default="production" if not DEBUG else "development")
+SENTRY_TRACES_SAMPLE_RATE = config("SENTRY_TRACES_SAMPLE_RATE", default=0.0, cast=float)
+SENTRY_PROFILES_SAMPLE_RATE = config("SENTRY_PROFILES_SAMPLE_RATE", default=0.0, cast=float)
 
 X_FRAME_OPTIONS = "DENY"
 SECURE_CONTENT_TYPE_NOSNIFF = True
@@ -155,6 +235,9 @@ AXES_VERBOSE = config("AXES_VERBOSE", default=False, cast=bool)
 
 if "test" in sys.argv:
     AXES_ENABLED = False
+    AI_SUMMARY_ENABLED = False
+    PUBLIC_STATS_CACHE_SECONDS = 0
+    CELERY_TASK_ALWAYS_EAGER = True
     AUTHENTICATION_BACKENDS = [
         "django.contrib.auth.backends.ModelBackend",
     ]
@@ -194,6 +277,16 @@ LOGGING = {
             "level": "INFO",
             "propagate": False,
         },
+        "django.request": {
+            "handlers": ["console", "file"],
+            "level": "ERROR",
+            "propagate": False,
+        },
+        "django.security.csrf": {
+            "handlers": ["console", "file"],
+            "level": "ERROR",
+            "propagate": False,
+        },
         "marketplace": {
             "handlers": ["console", "file"],
             "level": "INFO",
@@ -209,6 +302,11 @@ LOGGING = {
             "level": "INFO",
             "propagate": False,
         },
+        "helperlearner_root": {
+            "handlers": ["console", "file"],
+            "level": "INFO",
+            "propagate": False,
+        },
     },
     "root": {
         "handlers": ["console", "file"],
@@ -219,10 +317,20 @@ LOGGING = {
 if "test" in sys.argv:
     # Keep test runs deterministic and avoid mutating tracked log files.
     LOGGING["handlers"].pop("file", None)
-    for logger_name in ["django", "marketplace", "accounts", "notifications", "root"]:
-        if logger_name == "root":
-            handlers = LOGGING.get("root", {}).get("handlers", [])
-        else:
-            handlers = LOGGING["loggers"][logger_name].get("handlers", [])
+    for logger_config in LOGGING.get("loggers", {}).values():
+        handlers = logger_config.get("handlers", [])
         if "file" in handlers:
             handlers.remove("file")
+    root_handlers = LOGGING.get("root", {}).get("handlers", [])
+    if "file" in root_handlers:
+        root_handlers.remove("file")
+
+if SENTRY_DSN:
+    from helperlearner_root.observability import configure_sentry
+
+    configure_sentry(
+        dsn=SENTRY_DSN,
+        environment=SENTRY_ENVIRONMENT,
+        traces_sample_rate=SENTRY_TRACES_SAMPLE_RATE,
+        profiles_sample_rate=SENTRY_PROFILES_SAMPLE_RATE,
+    )

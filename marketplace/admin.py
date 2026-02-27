@@ -7,6 +7,9 @@ from accounts.models import CustomUser
 from . import services
 from .models import (
     Attachment,
+    ChatMessage,
+    ChatThread,
+    ChatThreadParticipant,
     Comment,
     Experiment,
     ExperimentAssignment,
@@ -34,7 +37,10 @@ from .models import (
     WebhookEndpoint,
     WalletLedger,
     Workspace,
+    WorkspaceIssue,
+    WorkspaceIssueActivity,
     WorkspaceMembership,
+    WorkspaceProject,
     WorkspaceWalletEntry,
 )
 
@@ -91,6 +97,33 @@ class CommentAdmin(admin.ModelAdmin):
     list_display = ('user', 'request', 'is_private', 'created_at')
     list_filter = ('is_private',)
     search_fields = ('content', 'user__username', 'request__title')
+
+
+@admin.register(ChatThread)
+class ChatThreadAdmin(admin.ModelAdmin):
+    """Admin listing for chat threads tied to requests, jobs, or workspaces."""
+
+    list_display = ('display_title', 'thread_type', 'created_by', 'last_message_at', 'created_at')
+    list_filter = ('thread_type', 'created_at')
+    search_fields = ('title', 'help_request__title', 'job__title', 'workspace__name')
+
+
+@admin.register(ChatThreadParticipant)
+class ChatThreadParticipantAdmin(admin.ModelAdmin):
+    """Admin listing for chat thread participants and read state."""
+
+    list_display = ('thread', 'user', 'joined_at', 'last_read_at')
+    list_filter = ('joined_at',)
+    search_fields = ('thread__title', 'user__username')
+
+
+@admin.register(ChatMessage)
+class ChatMessageAdmin(admin.ModelAdmin):
+    """Admin listing for chat messages."""
+
+    list_display = ('thread', 'sender', 'created_at')
+    list_filter = ('created_at',)
+    search_fields = ('content', 'sender__username', 'thread__title')
 
 
 @admin.register(HelpRequestProposal)
@@ -337,6 +370,42 @@ class WorkspaceAdmin(admin.ModelAdmin):
 
     list_display = ('name', 'slug', 'owner', 'wallet_inr', 'created_at')
     search_fields = ('name', 'slug', 'owner__username')
+
+
+@admin.register(WorkspaceProject)
+class WorkspaceProjectAdmin(admin.ModelAdmin):
+    """Admin listing for workspace project boards."""
+
+    list_display = ('name', 'key', 'workspace', 'is_active', 'created_by', 'created_at')
+    list_filter = ('is_active', 'workspace')
+    search_fields = ('name', 'key', 'workspace__name')
+
+
+@admin.register(WorkspaceIssue)
+class WorkspaceIssueAdmin(admin.ModelAdmin):
+    """Admin listing for workspace issues."""
+
+    list_display = (
+        'issue_key',
+        'title',
+        'project',
+        'status',
+        'priority',
+        'reporter',
+        'assignee',
+        'updated_at',
+    )
+    list_filter = ('status', 'priority', 'project')
+    search_fields = ('title', 'description', 'project__name', 'project__key', 'reporter__username', 'assignee__username')
+
+
+@admin.register(WorkspaceIssueActivity)
+class WorkspaceIssueActivityAdmin(admin.ModelAdmin):
+    """Admin listing for issue status/assignment audit actions."""
+
+    list_display = ('issue', 'action', 'actor', 'from_value', 'to_value', 'created_at')
+    list_filter = ('action', 'created_at')
+    search_fields = ('issue__title', 'issue__project__key', 'actor__username', 'note')
 
 
 @admin.register(WorkspaceMembership)

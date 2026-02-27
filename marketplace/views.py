@@ -6,9 +6,11 @@ from decimal import Decimal
 from urllib.parse import urlencode
 
 import django_filters
+from django.conf import settings
 from django.contrib.contenttypes.models import ContentType
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
+from django.core.cache import cache
 from django.core.paginator import Paginator
 from django.db import transaction
 from django.db.models import Count, F, Max, OuterRef, Q, Subquery, Value
@@ -78,24 +80,72 @@ from .webhooks import dispatch_webhook_event
 logger = logging.getLogger(__name__)
 
 
+def _cache_get_or_set(cache_key, timeout_seconds, builder):
+    """Return cached value when enabled, else compute using the builder callback."""
+    if timeout_seconds <= 0:
+        return builder()
+    cached = cache.get(cache_key)
+    if cached is not None:
+        return cached
+    value = builder()
+    cache.set(cache_key, value, timeout_seconds)
+    return value
+
+
+def _ordered_by_ids(queryset, ordered_ids):
+    """Materialize queryset ordered to match the original id list sequence."""
+    if not ordered_ids:
+        return []
+    order_index = {pk: idx for idx, pk in enumerate(ordered_ids)}
+    items = list(queryset.filter(pk__in=ordered_ids))
+    items.sort(key=lambda item: order_index.get(item.pk, len(order_index)))
+    return items
+
+
 def home(request):
     """Render the homepage with live user/open-request stats and recent opportunities."""
-    context = {
-        'total_users': CustomUser.objects.count(),
-        'open_requests': HelpRequest.objects.filter(status='open').count(),
-        'open_paid_jobs': FreelanceJob.objects.filter(status='open').count(),
-        'recent_requests': (
+    cache_ttl = getattr(settings, 'PUBLIC_STATS_CACHE_SECONDS', 45)
+    stats = _cache_get_or_set(
+        'home:stats:v1',
+        cache_ttl,
+        lambda: {
+            'total_users': CustomUser.objects.count(),
+            'open_requests': HelpRequest.objects.filter(status='open').count(),
+            'open_paid_jobs': FreelanceJob.objects.filter(status='open').count(),
+        },
+    )
+    recent_request_ids = _cache_get_or_set(
+        'home:recent_requests:v1',
+        cache_ttl,
+        lambda: list(
             HelpRequest.objects.filter(status='open')
-            .select_related('skill_needed')
-            .prefetch_related('tags')
-            .order_by('-created_at')[:3]
+            .order_by('-created_at')
+            .values_list('pk', flat=True)[:3]
         ),
-        'recent_paid_jobs': (
+    )
+    recent_paid_job_ids = _cache_get_or_set(
+        'home:recent_paid_jobs:v1',
+        cache_ttl,
+        lambda: list(
             FreelanceJob.objects.filter(status='open')
-            .select_related('client', 'skill_needed')
-            .prefetch_related('tags')
-            .order_by('-created_at')[:3]
+            .order_by('-created_at')
+            .values_list('pk', flat=True)[:3]
         ),
+    )
+
+    recent_requests = _ordered_by_ids(
+        HelpRequest.objects.select_related('skill_needed').prefetch_related('tags'),
+        recent_request_ids,
+    )
+    recent_paid_jobs = _ordered_by_ids(
+        FreelanceJob.objects.select_related('client', 'skill_needed').prefetch_related('tags'),
+        recent_paid_job_ids,
+    )
+
+    context = {
+        **stats,
+        'recent_requests': recent_requests,
+        'recent_paid_jobs': recent_paid_jobs,
     }
     return render(request, 'marketplace/home.html', context)
 
@@ -689,7 +739,7 @@ def ai_request_assist(request):
     try:
         suggestion = generate_request_assistance(title, description, available_skills)
     except RuntimeError as exc:
-        logger.warning('AI request assist unavailable for user=%s: %s', request.user.username, exc)
+        logger.info('AI request assist unavailable for user=%s: %s', request.user.username, exc)
         return JsonResponse({'ok': False, 'error': str(exc)}, status=503)
 
     return JsonResponse({'ok': True, 'suggestion': suggestion})

@@ -783,6 +783,287 @@ class WorkspaceWalletEntry(models.Model):
         ]
 
 
+class WorkspaceProject(models.Model):
+    workspace = models.ForeignKey(Workspace, on_delete=models.CASCADE, related_name='projects')
+    name = models.CharField(max_length=140)
+    key = models.CharField(max_length=12)
+    description = models.TextField(blank=True)
+    is_active = models.BooleanField(default=True)
+    created_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='workspace_projects_created',
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    def save(self, *args, **kwargs):
+        """Normalize project key to uppercase slug-friendly format."""
+        cleaned_key = (self.key or '').strip().upper().replace(' ', '-')
+        self.key = cleaned_key or 'PROJ'
+        super().save(*args, **kwargs)
+
+    def __str__(self):
+        return f'{self.workspace.slug}:{self.key}'
+
+    class Meta:
+        ordering = ['workspace__name', 'name']
+        indexes = [
+            models.Index(fields=['workspace', 'is_active']),
+            models.Index(fields=['workspace', 'key']),
+            models.Index(fields=['created_at']),
+        ]
+        constraints = [
+            models.UniqueConstraint(fields=['workspace', 'key'], name='unique_workspace_project_key'),
+        ]
+
+
+class WorkspaceIssue(models.Model):
+    STATUS_CHOICES = [
+        ('todo', 'To Do'),
+        ('in_progress', 'In Progress'),
+        ('blocked', 'Blocked'),
+        ('done', 'Done'),
+    ]
+    PRIORITY_CHOICES = [
+        ('low', 'Low'),
+        ('medium', 'Medium'),
+        ('high', 'High'),
+        ('critical', 'Critical'),
+    ]
+
+    project = models.ForeignKey(WorkspaceProject, on_delete=models.CASCADE, related_name='issues')
+    issue_number = models.PositiveIntegerField()
+    title = models.CharField(max_length=180)
+    description = models.TextField(blank=True)
+    status = models.CharField(max_length=12, choices=STATUS_CHOICES, default='todo')
+    priority = models.CharField(max_length=10, choices=PRIORITY_CHOICES, default='medium')
+    reporter = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name='workspace_issues_reported',
+    )
+    assignee = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='workspace_issues_assigned',
+    )
+    estimate_points = models.PositiveIntegerField(null=True, blank=True, validators=[MinValueValidator(1)])
+    due_date = models.DateField(null=True, blank=True)
+    resolved_at = models.DateTimeField(null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    @property
+    def issue_key(self):
+        return f'{self.project.key}-{self.issue_number}'
+
+    def save(self, *args, **kwargs):
+        """Auto-assign project-scoped issue numbers and resolve timestamp."""
+        if self._state.adding and not self.issue_number:
+            max_number = (
+                WorkspaceIssue.objects.filter(project=self.project)
+                .aggregate(max_value=models.Max('issue_number'))
+                .get('max_value')
+                or 0
+            )
+            self.issue_number = max_number + 1
+
+        if self.status == 'done' and self.resolved_at is None:
+            self.resolved_at = timezone.now()
+        elif self.status != 'done':
+            self.resolved_at = None
+
+        super().save(*args, **kwargs)
+
+    def __str__(self):
+        return f'{self.issue_key}: {self.title}'
+
+    class Meta:
+        ordering = ['-updated_at']
+        indexes = [
+            models.Index(fields=['project', 'status']),
+            models.Index(fields=['project', 'priority']),
+            models.Index(fields=['assignee', 'status']),
+            models.Index(fields=['due_date']),
+            models.Index(fields=['created_at']),
+            models.Index(fields=['updated_at']),
+        ]
+        constraints = [
+            models.UniqueConstraint(fields=['project', 'issue_number'], name='unique_project_issue_number'),
+        ]
+
+
+class WorkspaceIssueActivity(models.Model):
+    issue = models.ForeignKey(WorkspaceIssue, on_delete=models.CASCADE, related_name='activity')
+    actor = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='workspace_issue_actions',
+    )
+    action = models.CharField(max_length=40)
+    from_value = models.CharField(max_length=120, blank=True)
+    to_value = models.CharField(max_length=120, blank=True)
+    note = models.TextField(blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    def __str__(self):
+        return f'{self.issue.issue_key} {self.action}'
+
+    class Meta:
+        ordering = ['-created_at']
+        indexes = [
+            models.Index(fields=['issue', 'created_at']),
+            models.Index(fields=['actor', 'created_at']),
+            models.Index(fields=['action']),
+        ]
+
+
+class ChatThread(models.Model):
+    THREAD_TYPE_CHOICES = [
+        ('request', 'Request'),
+        ('job', 'Paid Job'),
+        ('workspace', 'Workspace'),
+    ]
+
+    thread_type = models.CharField(max_length=12, choices=THREAD_TYPE_CHOICES)
+    title = models.CharField(max_length=180, blank=True)
+    help_request = models.OneToOneField(
+        HelpRequest,
+        on_delete=models.CASCADE,
+        null=True,
+        blank=True,
+        related_name='chat_thread',
+    )
+    job = models.OneToOneField(
+        FreelanceJob,
+        on_delete=models.CASCADE,
+        null=True,
+        blank=True,
+        related_name='chat_thread',
+    )
+    workspace = models.OneToOneField(
+        Workspace,
+        on_delete=models.CASCADE,
+        null=True,
+        blank=True,
+        related_name='chat_thread',
+    )
+    created_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='chat_threads_created',
+    )
+    participants = models.ManyToManyField(
+        settings.AUTH_USER_MODEL,
+        through='ChatThreadParticipant',
+        related_name='chat_threads',
+    )
+    last_message_at = models.DateTimeField(null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    def clean(self):
+        """Ensure thread context is valid for selected type."""
+        context_count = sum(bool(value) for value in [self.help_request_id, self.job_id, self.workspace_id])
+        if context_count > 1:
+            raise ValidationError('A chat thread can be linked to only one context.')
+
+        expected_field = {
+            'request': self.help_request_id,
+            'job': self.job_id,
+            'workspace': self.workspace_id,
+        }.get(self.thread_type)
+        if not expected_field:
+            raise ValidationError('Selected thread type must have a matching linked object.')
+
+    @property
+    def display_title(self):
+        """Return friendly title for thread listings and headers."""
+        if self.title:
+            return self.title
+        if self.thread_type == 'request' and self.help_request_id:
+            return f'Request: {self.help_request.title}'
+        if self.thread_type == 'job' and self.job_id:
+            return f'Job: {self.job.title}'
+        if self.thread_type == 'workspace' and self.workspace_id:
+            return f'Workspace: {self.workspace.name}'
+        return f'Chat #{self.pk}'
+
+    def __str__(self):
+        return self.display_title
+
+    class Meta:
+        ordering = ['-last_message_at', '-updated_at']
+        indexes = [
+            models.Index(fields=['thread_type']),
+            models.Index(fields=['last_message_at']),
+            models.Index(fields=['created_at']),
+        ]
+
+
+class ChatThreadParticipant(models.Model):
+    thread = models.ForeignKey(ChatThread, on_delete=models.CASCADE, related_name='participations')
+    user = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name='chat_participations',
+    )
+    joined_at = models.DateTimeField(auto_now_add=True)
+    last_read_at = models.DateTimeField(null=True, blank=True)
+
+    def __str__(self):
+        return f'{self.user.username} in {self.thread.display_title}'
+
+    class Meta:
+        ordering = ['-joined_at']
+        indexes = [
+            models.Index(fields=['user', 'last_read_at']),
+            models.Index(fields=['thread', 'last_read_at']),
+        ]
+        constraints = [
+            models.UniqueConstraint(fields=['thread', 'user'], name='unique_chat_thread_user'),
+        ]
+
+
+class ChatMessage(models.Model):
+    thread = models.ForeignKey(ChatThread, on_delete=models.CASCADE, related_name='messages')
+    sender = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name='chat_messages_sent',
+    )
+    content = models.TextField(max_length=2000)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    def clean(self):
+        """Reject blank chat messages."""
+        if not (self.content or '').strip():
+            raise ValidationError('Message content cannot be empty.')
+
+    def save(self, *args, **kwargs):
+        self.content = (self.content or '').strip()
+        super().save(*args, **kwargs)
+
+    def __str__(self):
+        return f'{self.sender.username} in {self.thread.display_title}'
+
+    class Meta:
+        ordering = ['created_at']
+        indexes = [
+            models.Index(fields=['thread', 'created_at']),
+            models.Index(fields=['sender', 'created_at']),
+        ]
+
+
 class PortfolioItem(models.Model):
     user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='portfolio_items')
     title = models.CharField(max_length=160)

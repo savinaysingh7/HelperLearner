@@ -27,6 +27,7 @@ HelperLearner is a Django 6 knowledge marketplace where users post help requests
 - Trust Score v2 breakdown (on-time %, dispute %, response time, streak).
 - Risk/fraud checks for collusion and KP transfer velocity/patterns.
 - Team workspaces with shared wallet and role permissions.
+- Realtime chat inbox with request/job/workspace conversation rooms.
 - Generic attachment uploads for requests, jobs, and comments.
 - API keys + webhook delivery logs for external integrations.
 - Moderation console with report queue, fraud alerts, and account suspension actions.
@@ -89,6 +90,41 @@ Notes:
 - `DEBUG` is always `False` in production settings.
 - `SECURE_PROXY_SSL_HEADER` is enabled for reverse-proxy deployments.
 
+### Optional Redis Cache
+If Redis is available, set:
+- `REDIS_URL` (example: `redis://localhost:6379/1`)
+
+The app auto-switches to `django-redis` when installed; otherwise it falls back to local-memory cache.
+
+### Optional Sentry Error Monitoring
+Set:
+- `SENTRY_DSN`
+- `SENTRY_ENVIRONMENT` (optional)
+- `SENTRY_TRACES_SAMPLE_RATE` (optional, default `0.0`)
+- `SENTRY_PROFILES_SAMPLE_RATE` (optional, default `0.0`)
+
+If `sentry-sdk` is installed and `SENTRY_DSN` is set, Sentry is initialized automatically.
+
+### Optional Celery Worker + Beat
+Set:
+- `CELERY_BROKER_URL`
+- `CELERY_RESULT_BACKEND`
+
+Background schedules are configured for:
+- request expiry
+- saved-search notifications
+- SLA engine checks
+
+Run worker:
+```bash
+celery -A helperlearner_root.celery:celery_app worker -l info
+```
+
+Run beat scheduler:
+```bash
+celery -A helperlearner_root.celery:celery_app beat -l info
+```
+
 ## Request Expiry Command
 Expire overdue open requests (cancel + refund + notify):
 ```bash
@@ -124,12 +160,16 @@ python manage.py run_sla_engine
 
 ## Web Endpoints
 - `GET /healthz/` lightweight health check endpoint for uptime probes
+- `GET /readyz/` readiness probe (database + cache checks)
 - `GET /search/?q=` unified search page for requests/users/skills
 - `GET /feed/` personalized activity feed (login required)
+- `GET /chat/` unified chat inbox for all conversation threads (login required)
+- `GET,POST /chat/thread/<id>/` view and send messages in a thread (login required)
 - `GET,POST /saved-searches/` create/manage saved request filters
 - `GET /recommendations/` personalized ranked opportunities
 - `GET,POST /workspaces/` create and browse team workspaces
 - `GET /workspaces/<slug>/` workspace members + shared wallet ledger
+- `GET /workspaces/<slug>/chat/` workspace group chat room
 - `GET,POST /kp/claim-daily/` daily +10 KP claim (24-hour cooldown)
 - `GET,POST /kp/transfer/` confirmed KP transfer flow
 - `GET,POST /accounts/profile/edit/` includes notification preference management
@@ -141,9 +181,11 @@ python manage.py run_sla_engine
 - `GET /jobs/` paid freelance jobs discovery
 - `GET,POST /jobs/post/` create paid freelance job and fund escrow
 - `GET /jobs/<id>/` paid job detail with milestones
+- `GET /jobs/<id>/chat/` open paid-job participant chat
 - `GET /jobs/<id>/proposals/compare/` side-by-side proposal comparison
 - `GET /request/<id>/proposals/compare/` side-by-side proposal comparison
 - `POST /request/<id>/propose/` submit or update helper proposal
+- `GET /request/<id>/chat/` open request participant chat
 - `POST /request/<id>/proposals/<proposal_id>/select/` select a helper proposal
 - `POST /request/<id>/proposals/withdraw/` withdraw own helper proposal
 - `POST /jobs/<id>/propose/` submit or update freelancer proposal
@@ -201,3 +243,20 @@ python manage.py seed_indian_demo_data --drop-superusers
 - Saved-search digests with per-query frequency options (instant/daily/weekly).
 - SLA-backed paid jobs with automatic penalties for breaches.
 - API keys for third-party integrations and usage limits.
+
+## Operations Runbook (Practical)
+1. Startup checks:
+   - `python manage.py check`
+   - `python manage.py migrate --plan`
+   - `python manage.py test`
+2. Runtime checks:
+   - hit `/healthz/` for liveness
+   - hit `/readyz/` for DB/cache readiness
+3. Scheduled workflows:
+   - run Celery worker + beat or cron equivalents for `expire_requests`, `notify_saved_searches`, `run_sla_engine`
+4. Incident baseline:
+   - use `X-Request-ID` from responses/logs for traceability
+   - inspect `server_log.txt` and Sentry events for stack traces
+5. Rollback safety:
+   - maintain DB backups before deploy
+   - revert app release and run forward-only migration strategy

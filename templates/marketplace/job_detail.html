@@ -74,6 +74,11 @@
                     {% if can_cancel %}
                         <a href="{% url 'cancel_freelance_job' job.pk %}" class="btn btn-outline-danger">Cancel Job</a>
                     {% endif %}
+                    {% if job.freelancer and user.is_authenticated %}
+                        {% if user == job.client or user == job.freelancer %}
+                            <a href="{% url 'job_chat' job.pk %}" class="btn btn-outline-info">Open Chat</a>
+                        {% endif %}
+                    {% endif %}
                     <a href="{% url 'report_content' 'job' job.pk %}" class="btn btn-outline-secondary">Report</a>
                 </div>
             </div>

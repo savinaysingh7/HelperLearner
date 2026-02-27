@@ -1,0 +1,58 @@
+{% extends 'base.html' %}
+
+{% block title %}Chats | HelperLearner{% endblock %}
+
+{% block content %}
+<section class="page-head">
+    <span class="eyebrow"><i class="bi bi-chat-dots"></i>Messages</span>
+    <h1 class="h3">Chat Inbox</h1>
+    <p class="text-muted mb-0">Request, paid job, and workspace conversations in one place.</p>
+</section>
+
+<div class="card">
+    <div class="list-group list-group-flush">
+        {% for row in rows %}
+            <a href="{% url 'chat_thread_detail' row.thread.pk %}" class="list-group-item list-group-item-action chat-inbox-item {% if row.is_unread %}is-unread{% endif %}">
+                <div class="d-flex justify-content-between align-items-start gap-3">
+                    <div class="flex-grow-1">
+                        <div class="d-flex flex-wrap align-items-center gap-2 mb-1">
+                            <span class="fw-semibold">{{ row.thread.display_title }}</span>
+                            {% if row.thread.thread_type == 'request' %}
+                                <span class="badge text-bg-primary-subtle border">Request</span>
+                            {% elif row.thread.thread_type == 'job' %}
+                                <span class="badge text-bg-warning-subtle border">Paid Job</span>
+                            {% elif row.thread.thread_type == 'workspace' %}
+                                <span class="badge text-bg-info-subtle border">Workspace</span>
+                            {% endif %}
+                            {% if row.is_unread %}
+                                <span class="badge text-bg-danger">Unread</span>
+                            {% endif %}
+                        </div>
+                        {% if row.latest_message %}
+                            <p class="mb-0 text-muted small">
+                                <strong>{{ row.latest_message.sender.username }}:</strong>
+                                {{ row.latest_message.content|truncatechars:120 }}
+                            </p>
+                        {% else %}
+                            <p class="mb-0 text-muted small">No messages yet. Start the conversation.</p>
+                        {% endif %}
+                    </div>
+                    <small class="text-muted text-nowrap">
+                        {% if row.latest_message %}
+                            {{ row.latest_message.created_at|timesince }} ago
+                        {% else %}
+                            {{ row.thread.created_at|timesince }} ago
+                        {% endif %}
+                    </small>
+                </div>
+            </a>
+        {% empty %}
+            <div class="empty-state text-center py-5">
+                <div class="icon"><i class="bi bi-chat-square-heart"></i></div>
+                <h2 class="h5 mt-2">No chats yet</h2>
+                <p class="text-muted mb-0">Open any active request, job, or workspace to start chatting.</p>
+            </div>
+        {% endfor %}
+    </div>
+</div>
+{% endblock %}

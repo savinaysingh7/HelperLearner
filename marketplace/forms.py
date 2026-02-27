@@ -4,6 +4,7 @@ from django import forms
 
 from .models import (
     Attachment,
+    ChatMessage,
     Comment,
     FreelanceJob,
     FreelanceJobProposal,
@@ -22,6 +23,8 @@ from .models import (
     Tag,
     WebhookEndpoint,
     Workspace,
+    WorkspaceIssue,
+    WorkspaceProject,
 )
 
 
@@ -105,6 +108,30 @@ class CommentForm(forms.ModelForm):
         labels = {
             'is_private': 'Private (only visible to requester and helper)',
         }
+
+
+class ChatMessageForm(forms.ModelForm):
+    """Form for sending chat messages in a thread."""
+
+    class Meta:
+        model = ChatMessage
+        fields = ['content']
+        widgets = {
+            'content': forms.Textarea(
+                attrs={
+                    'class': 'form-control',
+                    'rows': 2,
+                    'placeholder': 'Write a message...',
+                    'maxlength': 2000,
+                }
+            ),
+        }
+
+    def clean_content(self):
+        content = (self.cleaned_data.get('content') or '').strip()
+        if not content:
+            raise forms.ValidationError('Message cannot be empty.')
+        return content
 
 
 class SearchForm(forms.Form):
@@ -514,6 +541,52 @@ class WorkspaceTransferForm(forms.Form):
         max_digits=10,
         widget=forms.NumberInput(attrs={'class': 'form-control', 'min': 1, 'step': '0.01'}),
     )
+
+
+class WorkspaceProjectForm(forms.ModelForm):
+    """Form for creating and updating Jira-style workspace projects."""
+
+    class Meta:
+        model = WorkspaceProject
+        fields = ['name', 'key', 'description', 'is_active']
+        widgets = {
+            'name': forms.TextInput(attrs={'class': 'form-control', 'placeholder': 'e.g., Platform Revamp'}),
+            'key': forms.TextInput(attrs={'class': 'form-control', 'placeholder': 'PLAT'}),
+            'description': forms.Textarea(attrs={'class': 'form-control', 'rows': 3}),
+            'is_active': forms.CheckboxInput(attrs={'class': 'form-check-input'}),
+        }
+
+    def clean_key(self):
+        key = (self.cleaned_data.get('key') or '').strip().upper().replace(' ', '-')
+        if not key:
+            raise forms.ValidationError('Project key is required.')
+        if len(key) < 2:
+            raise forms.ValidationError('Project key should be at least 2 characters.')
+        return key
+
+
+class WorkspaceIssueForm(forms.ModelForm):
+    """Form for creating and editing workspace issues."""
+
+    class Meta:
+        model = WorkspaceIssue
+        fields = ['title', 'description', 'status', 'priority', 'assignee', 'estimate_points', 'due_date']
+        widgets = {
+            'title': forms.TextInput(attrs={'class': 'form-control', 'placeholder': 'Issue title'}),
+            'description': forms.Textarea(attrs={'class': 'form-control', 'rows': 4}),
+            'status': forms.Select(attrs={'class': 'form-select'}),
+            'priority': forms.Select(attrs={'class': 'form-select'}),
+            'assignee': forms.Select(attrs={'class': 'form-select'}),
+            'estimate_points': forms.NumberInput(attrs={'class': 'form-control', 'min': 1, 'step': 1}),
+            'due_date': forms.DateInput(attrs={'class': 'form-control', 'type': 'date'}),
+        }
+
+    def __init__(self, *args, **kwargs):
+        self.workspace = kwargs.pop('workspace', None)
+        super().__init__(*args, **kwargs)
+        if self.workspace:
+            member_ids = self.workspace.memberships.values_list('user_id', flat=True)
+            self.fields['assignee'].queryset = self.fields['assignee'].queryset.filter(pk__in=member_ids)
 
 
 class PortfolioItemForm(forms.ModelForm):

@@ -136,6 +136,11 @@
                                 <a href="{% url 'delete_request' req.pk %}" class="btn btn-danger">Delete</a>
                             {% endif %}
                         {% endif %}
+                        {% if req.accepted_by and user.is_authenticated %}
+                            {% if user == req.user or user == req.accepted_by %}
+                                <a href="{% url 'request_chat' req.pk %}" class="btn btn-outline-info">Open Chat</a>
+                            {% endif %}
+                        {% endif %}
                         <a href="{% url 'report_content' 'request' req.pk %}" class="btn btn-outline-secondary">Report</a>
                     </div>
                 </section>
