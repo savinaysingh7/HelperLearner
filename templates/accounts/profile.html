@@ -23,8 +23,9 @@
                         <div class="small text-muted">No ratings received yet</div>
                     {% endif %}
                     <div class="small mt-2">
-                        <span class="badge text-bg-primary">Trust {{ profile_user.trust_score|floatformat:1 }}/100</span>
-                        <a href="{% url 'trust_score_breakdown_self' %}" class="badge text-bg-info text-decoration-none">Trust v2 {{ trust_v2.trust_score_v2 }}</a>
+                        <a href="{% url 'trust_score_breakdown_self' %}" class="badge text-bg-primary text-decoration-none">
+                            Trust Score: {{ profile_user.trust_score|floatformat:1 }}/100
+                        </a>
                     </div>
                     <div class="small mt-2">
                         <span class="badge text-bg-light border">Notifications: {{ profile_user.get_notification_preference_display }}</span>

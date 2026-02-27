@@ -28,6 +28,7 @@ from .forms import DeveloperSignUpForm, KPTransferLookupForm, UserUpdateForm
 from .models import CustomUser
 from .query_utils import annotate_user_metrics
 from .trust import compute_trust_score_v2
+from .utils import get_client_ip, log_event
 
 
 def _profile_queryset():
@@ -77,12 +78,10 @@ def signup(request):
 def profile(request):
     """Render the authenticated user's profile with tasks, ratings, and listed skills."""
     profile_user = get_object_or_404(_profile_queryset(), pk=request.user.pk)
-    trust_v2 = compute_trust_score_v2(profile_user)
     context = {
         'profile_user': profile_user,
         'my_posts': HelpRequest.objects.filter(user=request.user).order_by('-created_at'),
         'my_tasks': HelpRequest.objects.filter(accepted_by=request.user).order_by('-created_at'),
-        'trust_v2': trust_v2,
     }
     return render(request, 'accounts/profile.html', context)
 
@@ -90,12 +89,10 @@ def profile(request):
 def public_profile(request, username):
     """Render the public profile view for a user including skills and rating summary."""
     profile_user = get_object_or_404(_profile_queryset(), username=username)
-    trust_v2 = compute_trust_score_v2(profile_user)
     context = {
         'profile_user': profile_user,
         'posted_count': HelpRequest.objects.filter(user=profile_user).count(),
         'helped_count': HelpRequest.objects.filter(accepted_by=profile_user, status='resolved').count(),
-        'trust_v2': trust_v2,
         'portfolio_items': profile_user.portfolio_items.select_related('primary_skill').all()[:6],
     }
     return render(request, 'accounts/public_profile.html', context)
@@ -109,6 +106,12 @@ def edit_profile(request):
         form = UserUpdateForm(request.POST, instance=request.user)
         if form.is_valid():
             form.save()
+            log_event(
+                user=request.user,
+                action='profile_update',
+                ip_address=get_client_ip(request),
+                metadata={'changed_fields': form.changed_data}
+            )
             messages.success(request, 'Profile updated successfully!')
             return redirect('profile')
     else:
@@ -168,7 +171,6 @@ def dashboard(request):
         request.user.wallet_entries.filter(direction='credit', source_type='job_milestone_release')
         .aggregate(total=Coalesce(Sum('amount_inr'), Value(Decimal('0.00'))))['total']
     )
-    trust_v2 = compute_trust_score_v2(request.user)
 
     now = timezone.now()
     first_month = _month_start(now, 5)
@@ -232,7 +234,6 @@ def dashboard(request):
             'open_disputes': open_disputes,
             'unread_notifications': unread_notifications,
         },
-        'trust_v2': trust_v2,
     }
     return render(request, 'accounts/dashboard.html', context)
 
@@ -305,6 +306,14 @@ def transfer_kp(request):
             sender.save(update_fields=['knowledge_points'])
             receiver.save(update_fields=['knowledge_points'])
             KPTransfer.objects.create(sender=sender, recipient=receiver, amount=amount)
+
+        log_event(
+            user=request.user,
+            action='kp_transfer',
+            target_user=recipient,
+            ip_address=get_client_ip(request),
+            metadata={'amount': amount}
+        )
 
         evaluate_kp_transfer_risk(sender, receiver, amount)
         Notification.objects.create(

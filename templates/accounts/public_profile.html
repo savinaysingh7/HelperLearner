@@ -22,8 +22,9 @@
                         {% endif %}
                     </div>
                     <div>
-                        <span class="badge text-bg-primary">Trust {{ profile_user.trust_score|floatformat:1 }}/100</span>
-                        <a href="{% url 'trust_score_breakdown' profile_user.username %}" class="badge text-bg-info text-decoration-none">Trust v2 {{ trust_v2.trust_score_v2 }}</a>
+                        <a href="{% url 'trust_score_breakdown' profile_user.username %}" class="badge text-bg-primary text-decoration-none">
+                            Trust Score: {{ profile_user.trust_score|floatformat:1 }}/100
+                        </a>
                     </div>
                 </div>
 

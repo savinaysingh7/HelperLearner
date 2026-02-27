@@ -53,6 +53,16 @@
                     {% endfor %}
                 </div>
 
+                {% if req.ai_summary %}
+                    <div class="alert alert-info py-2 px-3 mb-4 d-flex align-items-center gap-3">
+                        <i class="bi bi-stars fs-4"></i>
+                        <div>
+                            <div class="small fw-bold text-uppercase opacity-75" style="font-size: 0.7rem;">AI Summary</div>
+                            <div class="mb-0">{{ req.ai_summary }}</div>
+                        </div>
+                    </div>
+                {% endif %}
+
                 <h2 class="h5">Description</h2>
                 <p class="mb-4">{{ req.description }}</p>
 

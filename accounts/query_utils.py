@@ -27,7 +27,7 @@ def annotate_user_metrics(queryset):
             )
         )
         .annotate(
-            trust_score=Least(
+            basic_trust_score=Least(
                 Value(100.0),
                 Greatest(
                     Value(0.0),

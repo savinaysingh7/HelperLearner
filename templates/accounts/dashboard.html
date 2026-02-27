@@ -32,8 +32,8 @@
                         <div class="value">&#8377;{{ request.user.wallet_inr }}</div>
                     </div>
                     <div class="mini-stat">
-                        <div class="label">Trust v2</div>
-                        <div class="value">{{ trust_v2.trust_score_v2 }}</div>
+                        <div class="label">Trust Score</div>
+                        <div class="value">{{ request.user.trust_score|floatformat:1 }}</div>
                     </div>
                     <div class="mini-stat">
                         <div class="label">Success Rate</div>

@@ -4,6 +4,7 @@ from decimal import Decimal
 from django.db import transaction
 from django.utils import timezone
 
+from accounts.utils import log_event
 from .models import FreelanceJob, FraudAlert, JobDispute, PayoutRequest, TrustSignal, WalletLedger
 from .webhooks import dispatch_webhook_event
 

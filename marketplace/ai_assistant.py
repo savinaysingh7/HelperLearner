@@ -177,3 +177,40 @@ def generate_request_assistance(title, description, available_skills):
         "suggested_skill": suggested_skill,
         "reasoning_summary": reasoning_summary,
     }
+
+
+def generate_request_summary(title, description):
+    """Generate a single-sentence AI summary of a help request draft."""
+    api_key = (getattr(settings, "GEMINI_API_KEY", "") or "").strip()
+    if not api_key:
+        return ""
+
+    prompt = (
+        "Summarize this developer help request in exactly one concise sentence (max 150 chars).\n"
+        "Focus on the technical problem and desired outcome.\n"
+        f"Title: {title}\n"
+        f"Description: {description}\n"
+    )
+
+    payload = {
+        "contents": [{"role": "user", "parts": [{"text": prompt}]}],
+        "generationConfig": {"temperature": 0.2, "max_output_tokens": 100},
+    }
+
+    try:
+        model_name = _candidate_models()[0]
+        endpoint = f"https://generativelanguage.googleapis.com/v1beta/models/{model_name}:generateContent?key={api_key}"
+        req = request.Request(
+            endpoint,
+            data=json.dumps(payload).encode("utf-8"),
+            headers={"Content-Type": "application/json"},
+            method="POST",
+        )
+        with request.urlopen(req, timeout=10) as response:
+            body = response.read().decode("utf-8")
+            data = json.loads(body)
+            summary = data["candidates"][0]["content"]["parts"][0]["text"].strip()
+            return summary[:250]
+    except Exception as exc:
+        logger.warning("Gemini summary generation failed: %s", exc)
+        return ""

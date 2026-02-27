@@ -1,3 +1,4 @@
+from django.conf import settings
 from django.contrib.auth.models import AbstractUser
 from django.db import models
 from django.db.models import Sum
@@ -35,6 +36,8 @@ class CustomUser(AbstractUser):
         choices=UiDensity.choices,
         default=UiDensity.COMFORTABLE,
     )
+    trust_score = models.FloatField(default=0.0)
+    trust_score_updated_at = models.DateTimeField(null=True, blank=True)
 
     def allows_in_app_notifications(self):
         """Return True when the user allows in-app notification delivery."""
@@ -79,4 +82,36 @@ class CustomUser(AbstractUser):
             models.Index(fields=['last_kp_claim']),
             models.Index(fields=['notification_preference']),
             models.Index(fields=['ui_density']),
+            models.Index(fields=['trust_score']),
         ]
+
+
+class AuditLog(models.Model):
+    user = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='audit_actions'
+    )
+    target_user = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='audit_targets'
+    )
+    action = models.CharField(max_length=100)
+    ip_address = models.GenericIPAddressField(null=True, blank=True)
+    metadata = models.JSONField(default=dict, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['-created_at']
+        indexes = [
+            models.Index(fields=['action']),
+            models.Index(fields=['created_at']),
+        ]
+
+    def __str__(self):
+        return f"{self.action} by {self.user} at {self.created_at}"

@@ -88,3 +88,12 @@ def compute_trust_score_v2(user):
         'completed_count': completed_count,
         'dispute_count': dispute_count,
     }
+
+
+def update_user_trust_score(user):
+    """Compute trust score v2 and save it to the user's denormalized fields."""
+    metrics = compute_trust_score_v2(user)
+    user.trust_score = metrics['trust_score_v2']
+    user.trust_score_updated_at = timezone.now()
+    user.save(update_fields=['trust_score', 'trust_score_updated_at'])
+    return metrics

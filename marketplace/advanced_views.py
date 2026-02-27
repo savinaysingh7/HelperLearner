@@ -16,6 +16,7 @@ from django.views.decorators.http import require_POST
 from accounts.models import CustomUser
 from accounts.query_utils import annotate_user_metrics
 from accounts.trust import compute_trust_score_v2
+from accounts.utils import get_client_ip, log_event
 from notifications.models import Notification
 
 from .forms import (
@@ -786,6 +787,18 @@ def suspend_user_account(request, user_id):
     target.suspension_reason = reason
     target.save(update_fields=['is_suspended', 'suspended_until', 'suspension_reason'])
 
+    log_event(
+        user=request.user,
+        action='account_suspension',
+        target_user=target,
+        ip_address=get_client_ip(request),
+        metadata={
+            'duration_days': duration_days,
+            'reason': reason,
+            'suspended_until': target.suspended_until.isoformat(),
+        }
+    )
+
     messages.success(request, f'User {target.username} suspended for {duration_days} day(s).')
     return redirect('moderation_console')
 
@@ -801,6 +814,13 @@ def unsuspend_user_account(request, user_id):
     target.suspended_until = None
     target.suspension_reason = ''
     target.save(update_fields=['is_suspended', 'suspended_until', 'suspension_reason'])
+
+    log_event(
+        user=request.user,
+        action='account_unsuspension',
+        target_user=target,
+        ip_address=get_client_ip(request),
+    )
 
     messages.success(request, f'User {target.username} unsuspended.')
     return redirect('moderation_console')
