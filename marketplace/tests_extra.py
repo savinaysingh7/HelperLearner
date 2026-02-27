@@ -1,9 +1,14 @@
+import logging
 import time
+from unittest.mock import patch
 
 from django.core.exceptions import ValidationError
 from django.contrib.auth import get_user_model
 from django.test import Client, TestCase
+from django.test.utils import override_settings
 from django.urls import reverse
+
+from helperlearner_root.logging_context import RequestContextFilter, reset_request_context, set_request_context
 
 from .forms import HelpRequestForm
 from .models import HelpRequest, Skill
@@ -108,7 +113,10 @@ class HealthCheckTests(TestCase):
     def test_health_check_endpoint_returns_ok_json(self):
         response = self.client.get(reverse('health_check'))
         self.assertEqual(response.status_code, 200)
-        self.assertEqual(response.json(), {'status': 'ok', 'service': 'helperlearner'})
+        payload = response.json()
+        self.assertEqual(payload.get('status'), 'ok')
+        self.assertEqual(payload.get('service'), 'helperlearner')
+        self.assertEqual(payload.get('version'), 'v1')
 
 
 class ReadinessCheckTests(TestCase):
@@ -120,6 +128,30 @@ class ReadinessCheckTests(TestCase):
         self.assertEqual(payload.get('status'), 'ready')
         self.assertTrue(payload['checks']['database'])
         self.assertTrue(payload['checks']['cache'])
+        self.assertEqual(payload['checks']['celery_broker'], 'skipped')
+
+    @override_settings(READINESS_CHECK_CELERY=True)
+    @patch('helperlearner_root.views._check_celery_broker', return_value=(True, ''))
+    def test_readiness_includes_celery_broker_when_enabled(self, mocked_celery_probe):
+        response = self.client.get(reverse('readiness_check'))
+
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        self.assertEqual(payload.get('status'), 'ready')
+        self.assertTrue(payload['checks']['celery_broker'])
+        mocked_celery_probe.assert_called_once()
+
+    @override_settings(READINESS_CHECK_CELERY=True)
+    @patch('helperlearner_root.views._check_celery_broker', return_value=(False, 'broker unavailable'))
+    def test_readiness_degrades_when_celery_required_and_unhealthy(self, mocked_celery_probe):
+        response = self.client.get(reverse('readiness_check'))
+
+        self.assertEqual(response.status_code, 503)
+        payload = response.json()
+        self.assertEqual(payload.get('status'), 'degraded')
+        self.assertFalse(payload['checks']['celery_broker'])
+        self.assertTrue(any(err.startswith('celery_broker:') for err in payload.get('errors', [])))
+        mocked_celery_probe.assert_called_once()
 
 
 class RequestObservabilityTests(TestCase):
@@ -135,6 +167,32 @@ class RequestObservabilityTests(TestCase):
 
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.headers.get('X-Request-ID'), 'hl-test-id-001')
+
+    def test_request_context_filter_injects_expected_fields(self):
+        tokens = set_request_context(
+            request_id='req-test-1',
+            request_path='/sample/path',
+            request_method='GET',
+            request_user='alice',
+        )
+        try:
+            record = logging.LogRecord(
+                name='test.logger',
+                level=logging.INFO,
+                pathname=__file__,
+                lineno=1,
+                msg='sample',
+                args=(),
+                exc_info=None,
+            )
+            request_filter = RequestContextFilter()
+            request_filter.filter(record)
+            self.assertEqual(record.request_id, 'req-test-1')
+            self.assertEqual(record.request_path, '/sample/path')
+            self.assertEqual(record.request_method, 'GET')
+            self.assertEqual(record.request_user, 'alice')
+        finally:
+            reset_request_context(tokens)
 
 
 class CsrfProtectionTests(TestCase):

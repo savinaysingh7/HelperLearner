@@ -39,8 +39,10 @@ from .models import (
     Workspace,
     WorkspaceIssue,
     WorkspaceIssueActivity,
+    WorkspaceIssueComment,
     WorkspaceMembership,
     WorkspaceProject,
+    WorkspaceSprint,
     WorkspaceWalletEntry,
 )
 
@@ -406,6 +408,24 @@ class WorkspaceIssueActivityAdmin(admin.ModelAdmin):
     list_display = ('issue', 'action', 'actor', 'from_value', 'to_value', 'created_at')
     list_filter = ('action', 'created_at')
     search_fields = ('issue__title', 'issue__project__key', 'actor__username', 'note')
+
+
+@admin.register(WorkspaceSprint)
+class WorkspaceSprintAdmin(admin.ModelAdmin):
+    """Admin listing for sprint windows per workspace project."""
+
+    list_display = ('name', 'project', 'status', 'start_date', 'end_date', 'created_by', 'created_at')
+    list_filter = ('status', 'project')
+    search_fields = ('name', 'project__name', 'project__key')
+
+
+@admin.register(WorkspaceIssueComment)
+class WorkspaceIssueCommentAdmin(admin.ModelAdmin):
+    """Admin listing for issue comments."""
+
+    list_display = ('issue', 'author', 'created_at', 'updated_at')
+    list_filter = ('created_at',)
+    search_fields = ('issue__title', 'issue__project__key', 'author__username', 'content')
 
 
 @admin.register(WorkspaceMembership)

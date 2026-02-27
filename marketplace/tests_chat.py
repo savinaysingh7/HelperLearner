@@ -134,3 +134,55 @@ class ChatFeatureTests(TestCase):
             ChatThreadParticipant.objects.filter(thread=thread).values_list('user__username', flat=True)
         )
         self.assertEqual(participant_usernames, {'client_user', 'helper'})
+
+    def test_chat_thread_ajax_post_returns_json_message(self):
+        thread = ChatThread.objects.create(
+            thread_type='workspace',
+            title='Workspace: Async Updates',
+            created_by=self.client_user,
+        )
+        ChatThreadParticipant.objects.create(thread=thread, user=self.client_user)
+        ChatThreadParticipant.objects.create(thread=thread, user=self.helper)
+
+        self.client.login(username='client_user', password='password123')
+        response = self.client.post(
+            reverse('chat_thread_detail', args=[thread.pk]),
+            {'content': 'Real-time post from AJAX'},
+            HTTP_X_REQUESTED_WITH='XMLHttpRequest',
+            HTTP_ACCEPT='application/json',
+        )
+
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        self.assertTrue(payload['ok'])
+        self.assertEqual(payload['message']['thread_id'], thread.pk)
+        self.assertEqual(payload['message']['sender'], 'client_user')
+        self.assertTrue(
+            ChatMessage.objects.filter(thread=thread, sender=self.client_user, content='Real-time post from AJAX').exists()
+        )
+
+    def test_chat_thread_poll_after_id_returns_only_new_messages(self):
+        thread = ChatThread.objects.create(
+            thread_type='workspace',
+            title='Workspace: Polling',
+            created_by=self.client_user,
+        )
+        ChatThreadParticipant.objects.create(thread=thread, user=self.client_user)
+        ChatThreadParticipant.objects.create(thread=thread, user=self.helper)
+
+        first = ChatMessage.objects.create(thread=thread, sender=self.client_user, content='Old message')
+        newer = ChatMessage.objects.create(thread=thread, sender=self.helper, content='New incoming update')
+
+        self.client.login(username='client_user', password='password123')
+        response = self.client.get(
+            reverse('chat_thread_detail', args=[thread.pk]),
+            {'after_id': first.pk},
+            HTTP_X_REQUESTED_WITH='XMLHttpRequest',
+            HTTP_ACCEPT='application/json',
+        )
+
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        self.assertEqual(len(payload['messages']), 1)
+        self.assertEqual(payload['messages'][0]['message_id'], newer.pk)
+        self.assertEqual(payload['messages'][0]['content'], 'New incoming update')

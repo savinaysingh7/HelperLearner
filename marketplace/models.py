@@ -853,6 +853,13 @@ class WorkspaceIssue(models.Model):
         related_name='workspace_issues_assigned',
     )
     estimate_points = models.PositiveIntegerField(null=True, blank=True, validators=[MinValueValidator(1)])
+    sprint = models.ForeignKey(
+        'WorkspaceSprint',
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='issues',
+    )
     due_date = models.DateField(null=True, blank=True)
     resolved_at = models.DateTimeField(null=True, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
@@ -888,6 +895,7 @@ class WorkspaceIssue(models.Model):
         indexes = [
             models.Index(fields=['project', 'status']),
             models.Index(fields=['project', 'priority']),
+            models.Index(fields=['project', 'sprint']),
             models.Index(fields=['assignee', 'status']),
             models.Index(fields=['due_date']),
             models.Index(fields=['created_at']),
@@ -922,6 +930,80 @@ class WorkspaceIssueActivity(models.Model):
             models.Index(fields=['issue', 'created_at']),
             models.Index(fields=['actor', 'created_at']),
             models.Index(fields=['action']),
+        ]
+
+
+class WorkspaceSprint(models.Model):
+    STATUS_CHOICES = [
+        ('planned', 'Planned'),
+        ('active', 'Active'),
+        ('completed', 'Completed'),
+    ]
+
+    project = models.ForeignKey(WorkspaceProject, on_delete=models.CASCADE, related_name='sprints')
+    name = models.CharField(max_length=120)
+    goal = models.CharField(max_length=220, blank=True)
+    start_date = models.DateField()
+    end_date = models.DateField()
+    status = models.CharField(max_length=12, choices=STATUS_CHOICES, default='planned')
+    created_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='workspace_sprints_created',
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    def clean(self):
+        """Ensure sprint date window is valid."""
+        if self.end_date and self.start_date and self.end_date < self.start_date:
+            raise ValidationError('Sprint end date cannot be earlier than start date.')
+
+    def __str__(self):
+        return f'{self.project.key} {self.name}'
+
+    class Meta:
+        ordering = ['-start_date', '-created_at']
+        indexes = [
+            models.Index(fields=['project', 'status']),
+            models.Index(fields=['start_date', 'end_date']),
+            models.Index(fields=['created_at']),
+        ]
+        constraints = [
+            models.UniqueConstraint(fields=['project', 'name'], name='unique_project_sprint_name'),
+        ]
+
+
+class WorkspaceIssueComment(models.Model):
+    issue = models.ForeignKey(WorkspaceIssue, on_delete=models.CASCADE, related_name='comments')
+    author = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name='workspace_issue_comments',
+    )
+    content = models.TextField(max_length=2000)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    def clean(self):
+        """Reject empty comment bodies."""
+        if not (self.content or '').strip():
+            raise ValidationError('Comment content cannot be blank.')
+
+    def save(self, *args, **kwargs):
+        self.content = (self.content or '').strip()
+        super().save(*args, **kwargs)
+
+    def __str__(self):
+        return f'Comment by {self.author.username} on {self.issue.issue_key}'
+
+    class Meta:
+        ordering = ['created_at']
+        indexes = [
+            models.Index(fields=['issue', 'created_at']),
+            models.Index(fields=['author', 'created_at']),
         ]
 
 

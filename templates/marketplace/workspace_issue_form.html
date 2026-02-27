@@ -57,6 +57,10 @@
                 {{ form.estimate_points }}
             </div>
             <div class="col-12 col-md-4">
+                <label class="form-label" for="{{ form.sprint.id_for_label }}">Sprint</label>
+                {{ form.sprint }}
+            </div>
+            <div class="col-12 col-md-4">
                 <label class="form-label" for="{{ form.due_date.id_for_label }}">Due date</label>
                 {{ form.due_date }}
             </div>

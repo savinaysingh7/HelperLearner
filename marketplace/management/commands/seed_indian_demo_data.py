@@ -4,7 +4,9 @@ from datetime import timedelta
 from decimal import Decimal
 
 from django.conf import settings
+from django.contrib.contenttypes.models import ContentType
 from django.core.management.base import BaseCommand
+from django.core.files.base import ContentFile
 from django.db import transaction
 from django.utils import timezone
 
@@ -12,21 +14,44 @@ from accounts.models import CustomUser
 from notifications.models import Notification
 
 from marketplace.models import (
+    Attachment,
+    ChatMessage,
+    ChatThread,
+    ChatThreadParticipant,
     Comment,
+    Experiment,
+    ExperimentAssignment,
+    ExperimentVariant,
+    FraudAlert,
     FreelanceJob,
     FreelanceJobProposal,
     FreelanceJobProposalMilestone,
     HelpRequest,
     HelpRequestProposal,
+    IntegrationApiKey,
     JobDispute,
     JobMilestone,
+    KPTransfer,
+    MilestoneDeliverable,
+    ModerationFlag,
     PayoutRequest,
+    PortfolioItem,
     Rating,
     SavedSearch,
     Skill,
     Tag,
     TrustSignal,
     WalletLedger,
+    WebhookDelivery,
+    WebhookEndpoint,
+    Workspace,
+    WorkspaceIssue,
+    WorkspaceIssueActivity,
+    WorkspaceIssueComment,
+    WorkspaceMembership,
+    WorkspaceProject,
+    WorkspaceSprint,
+    WorkspaceWalletEntry,
 )
 
 
@@ -34,7 +59,8 @@ class Command(BaseCommand):
     help = (
         "Replace existing seeded/demo data with realistic Indian demo data that exercises "
         "KP requests, proposals, ratings, notifications, paid jobs, milestones, disputes, "
-        "wallet ledger, payouts, and saved searches."
+        "wallet ledger, payouts, saved searches, workspace Jira boards, chat threads, "
+        "integrations, moderation, fraud alerts, transfers, and experiments."
     )
 
     def add_arguments(self, parser):
@@ -71,13 +97,43 @@ class Command(BaseCommand):
                 f"{seeded['summary']['users']} users, "
                 f"{seeded['summary']['help_requests']} help requests, "
                 f"{seeded['summary']['jobs']} paid jobs, "
-                f"{seeded['summary']['notifications']} notifications."
+                f"{seeded['summary']['notifications']} notifications, "
+                f"{seeded['summary']['workspaces']} workspaces, "
+                f"{seeded['summary']['issues']} workspace issues."
             )
         )
         self.stdout.write(self.style.SUCCESS("Updated SEEDED_CREDENTIALS.md with new demo logins."))
 
     def _clear_existing_data(self, drop_superusers: bool):
         Notification.objects.all().delete()
+
+        ExperimentAssignment.objects.all().delete()
+        ExperimentVariant.objects.all().delete()
+        Experiment.objects.all().delete()
+
+        WebhookDelivery.objects.all().delete()
+        WebhookEndpoint.objects.all().delete()
+        IntegrationApiKey.objects.all().delete()
+        PortfolioItem.objects.all().delete()
+
+        ChatMessage.objects.all().delete()
+        ChatThreadParticipant.objects.all().delete()
+        ChatThread.objects.all().delete()
+
+        WorkspaceIssueComment.objects.all().delete()
+        WorkspaceIssueActivity.objects.all().delete()
+        WorkspaceIssue.objects.all().delete()
+        WorkspaceSprint.objects.all().delete()
+        WorkspaceProject.objects.all().delete()
+        WorkspaceWalletEntry.objects.all().delete()
+        WorkspaceMembership.objects.all().delete()
+        Workspace.objects.all().delete()
+
+        KPTransfer.objects.all().delete()
+        FraudAlert.objects.all().delete()
+        ModerationFlag.objects.all().delete()
+        Attachment.objects.all().delete()
+        MilestoneDeliverable.objects.all().delete()
 
         Rating.objects.all().delete()
         Comment.objects.all().delete()
@@ -128,12 +184,52 @@ class Command(BaseCommand):
             disputes=disputes,
             now=now,
         )
+        workspaces, projects, issues = self._create_workspaces_and_projects(
+            users=users,
+            skills=skills,
+            now=now,
+        )
+        sprints = self._create_sprints(workspaces=workspaces, projects=projects, users=users, now=now)
+        self._attach_issues_to_sprints(issues=issues, sprints=sprints, now=now)
+        self._create_issue_comments_and_activity(issues=issues, users=users, now=now)
+        self._create_chat_data(
+            users=users,
+            requests=requests,
+            jobs=jobs,
+            workspaces=workspaces,
+            now=now,
+        )
+        self._create_portfolio_data(users=users, skills=skills, now=now)
+        self._create_integrations_data(users=users, now=now)
+        self._create_moderation_and_fraud_data(
+            users=users,
+            requests=requests,
+            jobs=jobs,
+            disputes=disputes,
+            now=now,
+        )
+        self._create_kp_transfer_data(users=users, now=now)
+        self._create_attachment_data(
+            users=users,
+            requests=requests,
+            jobs=jobs,
+            issues=issues,
+            now=now,
+        )
+        self._create_deliverables_data(milestones=milestones, users=users, now=now)
+        self._create_experiment_data(users=users, now=now)
+        self._expand_saved_search_activity(users=users, skills=skills, tags=tags, now=now)
 
         summary = {
             "users": len(users),
             "help_requests": len(requests),
             "jobs": len(jobs),
-            "notifications": notification_count,
+            "notifications": Notification.objects.count(),
+            "workspaces": len(workspaces),
+            "projects": len(projects),
+            "issues": len(issues),
+            "chat_messages": ChatMessage.objects.count(),
+            "attachments": Attachment.objects.count(),
         }
         return {"users": users, "summary": summary}
 
@@ -1273,6 +1369,705 @@ class Command(BaseCommand):
 
         return Notification.objects.count()
 
+    def _create_workspaces_and_projects(self, users, skills, now):
+        usernames = list(users.keys())
+        workspace_specs = [
+            {
+                "key": "bharatscale_payments",
+                "name": "BharatScale Payments Guild",
+                "owner": "karan_malhotra",
+                "description": "Cross-city engineering team scaling UPI, GST invoicing, and payout reliability.",
+                "wallet_inr": Decimal("250000.00"),
+                "members": usernames[:12],
+            },
+            {
+                "key": "udaan_commerce_core",
+                "name": "Udaan Commerce Core",
+                "owner": "ananya_sharma",
+                "description": "Marketplace backend and customer experience squad for D2C storefront operations.",
+                "wallet_inr": Decimal("185000.00"),
+                "members": usernames[6:18],
+            },
+            {
+                "key": "namma_reliability_lab",
+                "name": "Namma Reliability Lab",
+                "owner": "siddharth_rao",
+                "description": "SRE and platform resilience team handling deployments, alerting, and observability.",
+                "wallet_inr": Decimal("165000.00"),
+                "members": usernames[12:] + usernames[:3],
+            },
+            {
+                "key": "dilli_product_studio",
+                "name": "Dilli Product Studio",
+                "owner": "kavya_reddy",
+                "description": "Product and UI team iterating on growth funnels, search UX, and experimentation.",
+                "wallet_inr": Decimal("142000.00"),
+                "members": usernames[3:15],
+            },
+        ]
+
+        workspaces = {}
+        for idx, spec in enumerate(workspace_specs, start=1):
+            workspace = Workspace.objects.create(
+                name=spec["name"],
+                owner=users[spec["owner"]],
+                description=spec["description"],
+                wallet_inr=spec["wallet_inr"],
+            )
+            Workspace.objects.filter(pk=workspace.pk).update(
+                created_at=now - timedelta(days=35 - (idx * 3)),
+                updated_at=now - timedelta(days=1 + idx),
+            )
+
+            role_cycle = ["admin", "member", "member", "member", "admin", "member"]
+            membership_usernames = list(dict.fromkeys([spec["owner"]] + spec["members"]))
+            for member_idx, username in enumerate(membership_usernames):
+                role = "owner" if username == spec["owner"] else role_cycle[member_idx % len(role_cycle)]
+                membership = WorkspaceMembership.objects.create(
+                    workspace=workspace,
+                    user=users[username],
+                    role=role,
+                )
+                WorkspaceMembership.objects.filter(pk=membership.pk).update(
+                    joined_at=now - timedelta(days=30 - member_idx),
+                )
+
+            wallet_specs = [
+                ("credit", Decimal("40000.00"), "initial_funding", "Seed capital for sprint execution", 26),
+                ("debit", Decimal("12000.00"), "tooling_subscription", "Shared infra/tooling bills", 18),
+                ("credit", Decimal("8500.00"), "client_recharge", "Client top-up for urgent release", 8),
+            ]
+            for direction, amount, source_type, note, days_ago in wallet_specs:
+                entry = WorkspaceWalletEntry.objects.create(
+                    workspace=workspace,
+                    actor=users[spec["owner"]],
+                    direction=direction,
+                    amount_inr=amount,
+                    source_type=source_type,
+                    note=note,
+                )
+                WorkspaceWalletEntry.objects.filter(pk=entry.pk).update(
+                    created_at=now - timedelta(days=days_ago),
+                )
+            workspaces[spec["key"]] = workspace
+
+        project_specs = [
+            ("bharatscale_payments", "PAYOPS", "Payment Operations", "UPI reconciliation, payouts, and merchant ledger integrity."),
+            ("bharatscale_payments", "RISK", "Risk & Compliance", "Fraud prevention, AML checks, and abuse controls."),
+            ("udaan_commerce_core", "CATALOG", "Catalog Platform", "Search relevance, catalog cache, and indexing pipelines."),
+            ("udaan_commerce_core", "CHECKOUT", "Checkout Experience", "Conversion funnel, taxes, and payment orchestration."),
+            ("namma_reliability_lab", "SRE", "Reliability Engineering", "SLA monitoring, incident response, and rollback controls."),
+            ("namma_reliability_lab", "OBS", "Observability Stack", "Logs, traces, metrics, and alert precision."),
+            ("dilli_product_studio", "GROWTH", "Growth Experiments", "Activation funnels, onboarding, and A/B experimentation."),
+            ("dilli_product_studio", "UX", "Design System", "UI consistency, accessibility, and responsive quality."),
+        ]
+
+        projects = {}
+        for idx, (workspace_key, project_key, name, description) in enumerate(project_specs, start=1):
+            project = WorkspaceProject.objects.create(
+                workspace=workspaces[workspace_key],
+                name=name,
+                key=project_key,
+                description=description,
+                is_active=True,
+                created_by=workspaces[workspace_key].owner,
+            )
+            WorkspaceProject.objects.filter(pk=project.pk).update(
+                created_at=now - timedelta(days=28 - idx),
+                updated_at=now - timedelta(days=2),
+            )
+            projects[f"{workspace_key}_{project_key.lower()}"] = project
+
+        issue_templates = [
+            ("UPI reconciliation lag on weekend peak traffic", "Bank callback delays are causing temporary mismatch in merchant balances.", "todo", "high", 5),
+            ("Railway deploy rollback playbook gaps", "Recent rollout lacked deterministic rollback steps across API and worker dynos.", "in_progress", "critical", 8),
+            ("GST credit note edge case in export flow", "Reverse-charge credit notes fail when state and GSTIN metadata are mixed.", "blocked", "medium", 3),
+            ("Webhook idempotency audit trail coverage", "Need stronger evidence logs for duplicate webhook payload handling.", "done", "medium", 5),
+            ("Dashboard filter persistence bug", "Date and city filters reset on pagination in analytics dashboard.", "todo", "low", 2),
+            ("Payout retry dedupe in worker queue", "Duplicate payout retries must be collapsed with a strict dedupe key.", "done", "high", 8),
+        ]
+
+        issues = []
+        for project_idx, project in enumerate(projects.values(), start=1):
+            members = list(
+                WorkspaceMembership.objects.filter(workspace=project.workspace)
+                .select_related("user")
+                .order_by("joined_at")
+            )
+            if not members:
+                continue
+
+            for issue_idx, (title, description, status, priority, points) in enumerate(issue_templates, start=1):
+                reporter = members[(issue_idx - 1) % len(members)].user
+                assignee = members[(issue_idx + 1) % len(members)].user
+                issue = WorkspaceIssue.objects.create(
+                    project=project,
+                    title=title,
+                    description=description,
+                    status=status,
+                    priority=priority,
+                    reporter=reporter,
+                    assignee=assignee,
+                    estimate_points=points,
+                    due_date=(now + timedelta(days=6 + issue_idx)).date(),
+                )
+
+                created_at = now - timedelta(days=22 - project_idx, hours=issue_idx * 2)
+                updated_at = created_at + timedelta(hours=14 + issue_idx)
+                resolved_at = updated_at if status == "done" else None
+                WorkspaceIssue.objects.filter(pk=issue.pk).update(
+                    created_at=created_at,
+                    updated_at=updated_at,
+                    resolved_at=resolved_at,
+                )
+                issue.refresh_from_db()
+
+                activity = WorkspaceIssueActivity.objects.create(
+                    issue=issue,
+                    actor=reporter,
+                    action="created",
+                    to_value=status,
+                    note="Issue created from sprint planning session.",
+                )
+                WorkspaceIssueActivity.objects.filter(pk=activity.pk).update(
+                    created_at=created_at + timedelta(minutes=10),
+                )
+                issues.append(issue)
+
+        return workspaces, projects, issues
+
+    def _create_sprints(self, workspaces, projects, users, now):
+        sprint_map = {}
+        for project in projects.values():
+            completed = WorkspaceSprint.objects.create(
+                project=project,
+                name="Sprint Jan",
+                goal="Stabilize critical workflows and close carry-forward bugs.",
+                start_date=(now - timedelta(days=55)).date(),
+                end_date=(now - timedelta(days=41)).date(),
+                status="completed",
+                created_by=project.created_by,
+            )
+            active = WorkspaceSprint.objects.create(
+                project=project,
+                name="Sprint Feb",
+                goal="Improve reliability and ship stakeholder-visible wins.",
+                start_date=(now - timedelta(days=8)).date(),
+                end_date=(now + timedelta(days=6)).date(),
+                status="active",
+                created_by=project.created_by,
+            )
+            planned = WorkspaceSprint.objects.create(
+                project=project,
+                name="Sprint Mar",
+                goal="Prepare expansion roadmap and automation upgrades.",
+                start_date=(now + timedelta(days=7)).date(),
+                end_date=(now + timedelta(days=21)).date(),
+                status="planned",
+                created_by=project.created_by,
+            )
+            WorkspaceSprint.objects.filter(pk=completed.pk).update(created_at=now - timedelta(days=58))
+            WorkspaceSprint.objects.filter(pk=active.pk).update(created_at=now - timedelta(days=10))
+            WorkspaceSprint.objects.filter(pk=planned.pk).update(created_at=now - timedelta(days=1))
+            sprint_map[project.pk] = {"completed": completed, "active": active, "planned": planned}
+        return sprint_map
+
+    def _attach_issues_to_sprints(self, issues, sprints, now):
+        for issue in issues:
+            sprint_set = sprints.get(issue.project_id)
+            if not sprint_set:
+                continue
+
+            if issue.status == "done":
+                issue.sprint = sprint_set["completed"]
+            elif issue.status in {"in_progress", "blocked"}:
+                issue.sprint = sprint_set["active"]
+            else:
+                issue.sprint = sprint_set["planned"] if issue.issue_number % 2 == 0 else None
+            issue.save(update_fields=["sprint", "resolved_at", "updated_at"])
+
+    def _create_issue_comments_and_activity(self, issues, users, now):
+        comment_snippets = [
+            "Can we lock scope for this by tomorrow EOD?",
+            "Added repro steps from staging logs and linked the failing endpoint traces.",
+            "Verified on sandbox tenant; production behavior still needs confirmation.",
+            "Let's keep this backward compatible with existing merchant onboarding flow.",
+            "Pushed a patch branch and requested review from reliability team.",
+        ]
+
+        for idx, issue in enumerate(issues, start=1):
+            commenters = [issue.reporter, issue.assignee]
+            workspace_members = list(
+                WorkspaceMembership.objects.filter(workspace=issue.project.workspace)
+                .select_related("user")
+                .order_by("joined_at")
+            )
+            if workspace_members:
+                commenters.append(workspace_members[idx % len(workspace_members)].user)
+
+            for comment_idx, commenter in enumerate(commenters[:3], start=1):
+                comment = WorkspaceIssueComment.objects.create(
+                    issue=issue,
+                    author=commenter,
+                    content=comment_snippets[(idx + comment_idx) % len(comment_snippets)],
+                )
+                comment_created = issue.created_at + timedelta(hours=comment_idx * 4)
+                WorkspaceIssueComment.objects.filter(pk=comment.pk).update(
+                    created_at=comment_created,
+                    updated_at=comment_created,
+                )
+                activity = WorkspaceIssueActivity.objects.create(
+                    issue=issue,
+                    actor=commenter,
+                    action="commented",
+                    note=comment.content[:180],
+                )
+                WorkspaceIssueActivity.objects.filter(pk=activity.pk).update(
+                    created_at=comment_created + timedelta(minutes=1),
+                )
+
+            if issue.status in {"in_progress", "blocked", "done"}:
+                status_activity = WorkspaceIssueActivity.objects.create(
+                    issue=issue,
+                    actor=issue.assignee or issue.reporter,
+                    action="status_changed",
+                    from_value="todo",
+                    to_value=issue.status,
+                )
+                WorkspaceIssueActivity.objects.filter(pk=status_activity.pk).update(
+                    created_at=issue.updated_at - timedelta(hours=3),
+                )
+
+            assignee_activity = WorkspaceIssueActivity.objects.create(
+                issue=issue,
+                actor=issue.reporter,
+                action="assignee_changed",
+                from_value="",
+                to_value=str(issue.assignee_id or ""),
+            )
+            WorkspaceIssueActivity.objects.filter(pk=assignee_activity.pk).update(
+                created_at=issue.created_at + timedelta(hours=1),
+            )
+
+    def _create_chat_data(self, users, requests, jobs, workspaces, now):
+        for req in requests.values():
+            if not req.accepted_by_id:
+                continue
+            thread = ChatThread.objects.create(
+                thread_type="request",
+                title=f"Request Chat: {req.title[:72]}",
+                help_request=req,
+                created_by=req.user,
+            )
+            ChatThreadParticipant.objects.create(thread=thread, user=req.user, last_read_at=now - timedelta(hours=4))
+            ChatThreadParticipant.objects.create(thread=thread, user=req.accepted_by, last_read_at=now - timedelta(hours=2))
+            message_pairs = [
+                (req.user, "Thanks for picking this up. Sharing context and expected output here."),
+                (req.accepted_by, "Got it. I will start with root-cause analysis and share patch draft."),
+                (req.user, "Please prioritize production-safe changes; we need rollback clarity too."),
+                (req.accepted_by, "Done. I will add tests and deployment notes before marking complete."),
+            ]
+            for idx, (sender, text) in enumerate(message_pairs, start=1):
+                msg = ChatMessage.objects.create(thread=thread, sender=sender, content=text)
+                created_at = now - timedelta(hours=30 - idx)
+                ChatMessage.objects.filter(pk=msg.pk).update(created_at=created_at)
+            thread.last_message_at = now - timedelta(hours=26)
+            thread.save(update_fields=["last_message_at", "updated_at"])
+
+        for job in jobs.values():
+            if not job.freelancer_id:
+                continue
+            thread = ChatThread.objects.create(
+                thread_type="job",
+                title=f"Job Chat: {job.title[:72]}",
+                job=job,
+                created_by=job.client,
+            )
+            ChatThreadParticipant.objects.create(thread=thread, user=job.client, last_read_at=now - timedelta(hours=3))
+            ChatThreadParticipant.objects.create(thread=thread, user=job.freelancer, last_read_at=now - timedelta(hours=2))
+            message_pairs = [
+                (job.client, "Please share milestone-wise delivery evidence before release."),
+                (job.freelancer, "Sure. I am uploading proof and changelog for each milestone."),
+                (job.client, "Great. Also add rollback notes for infra-impacting changes."),
+                (job.freelancer, "Will include rollback notes and post-deploy checks."),
+            ]
+            for idx, (sender, text) in enumerate(message_pairs, start=1):
+                msg = ChatMessage.objects.create(thread=thread, sender=sender, content=text)
+                created_at = now - timedelta(hours=22 - idx)
+                ChatMessage.objects.filter(pk=msg.pk).update(created_at=created_at)
+            thread.last_message_at = now - timedelta(hours=18)
+            thread.save(update_fields=["last_message_at", "updated_at"])
+
+        workspace_messages = [
+            "Daily standup: please update blockers before 10:30 AM IST.",
+            "Production watch: monitor payment retries and alert if error rate crosses threshold.",
+            "Design review at 4 PM for dashboard filters and accessibility fixes.",
+            "Reminder: close sprint carry-forward tasks before Friday evening.",
+            "Please attach deployment notes in issue comments for audit readiness.",
+        ]
+        for workspace in workspaces.values():
+            memberships = list(
+                WorkspaceMembership.objects.filter(workspace=workspace)
+                .select_related("user")
+                .order_by("joined_at")
+            )
+            if not memberships:
+                continue
+            thread = ChatThread.objects.create(
+                thread_type="workspace",
+                title=f"Workspace Room: {workspace.name}",
+                workspace=workspace,
+                created_by=workspace.owner,
+            )
+            for item in memberships:
+                ChatThreadParticipant.objects.create(
+                    thread=thread,
+                    user=item.user,
+                    last_read_at=now - timedelta(hours=1),
+                )
+
+            message_counter = 0
+            for round_idx in range(2):
+                for member_idx, item in enumerate(memberships):
+                    text = workspace_messages[(member_idx + round_idx) % len(workspace_messages)]
+                    msg = ChatMessage.objects.create(thread=thread, sender=item.user, content=text)
+                    created_at = now - timedelta(hours=max(1, 48 - message_counter))
+                    ChatMessage.objects.filter(pk=msg.pk).update(created_at=created_at)
+                    message_counter += 1
+                    if message_counter >= 28:
+                        break
+                if message_counter >= 28:
+                    break
+
+            thread.last_message_at = now - timedelta(hours=1)
+            thread.save(update_fields=["last_message_at", "updated_at"])
+
+    def _create_portfolio_data(self, users, skills, now):
+        for idx, user in enumerate(users.values(), start=1):
+            user_skills = list(user.skills.all())
+            primary_skill = user_skills[0] if user_skills else skills["Python"]
+            secondary_skill = user_skills[1] if len(user_skills) > 1 else primary_skill
+            entries = [
+                (
+                    f"{primary_skill.name} Reliability Upgrade for Indian Fintech API",
+                    "Reduced incident volume with observability and deterministic rollback safeguards.",
+                    "https://example.in/case-study/reliability",
+                    "https://github.com/example/reliability-playbook",
+                    primary_skill,
+                    True,
+                ),
+                (
+                    f"{secondary_skill.name} Feature Delivery for Multi-city Commerce Team",
+                    "Delivered measurable conversion improvement with maintainable architecture changes.",
+                    "https://example.in/case-study/feature-delivery",
+                    "https://github.com/example/feature-delivery",
+                    secondary_skill,
+                    False,
+                ),
+            ]
+            for entry_idx, (title, summary, project_url, evidence_url, skill, is_featured) in enumerate(entries, start=1):
+                item = PortfolioItem.objects.create(
+                    user=user,
+                    title=title,
+                    summary=summary,
+                    project_url=project_url,
+                    evidence_url=evidence_url,
+                    primary_skill=skill,
+                    is_featured=is_featured,
+                )
+                created_at = now - timedelta(days=45 - idx, hours=entry_idx * 3)
+                PortfolioItem.objects.filter(pk=item.pk).update(
+                    created_at=created_at,
+                    updated_at=created_at + timedelta(hours=2),
+                )
+
+    def _create_integrations_data(self, users, now):
+        active_users = list(users.values())[:14]
+        for idx, user in enumerate(active_users, start=1):
+            api_key, _ = IntegrationApiKey.create_key(user, f"{user.first_name} Integration Key")
+            IntegrationApiKey.objects.filter(pk=api_key.pk).update(
+                created_at=now - timedelta(days=18 - idx),
+                last_used_at=now - timedelta(days=max(1, idx // 2)),
+            )
+            if idx % 4 == 0:
+                IntegrationApiKey.objects.filter(pk=api_key.pk).update(
+                    is_active=False,
+                    revoked_at=now - timedelta(days=2),
+                )
+
+            endpoint = WebhookEndpoint.objects.create(
+                user=user,
+                name=f"{user.first_name} Ops Webhook",
+                url=f"https://hooks.example.in/{user.username}/events",
+                subscribed_events=[
+                    "request.status_changed",
+                    "job.status_changed",
+                    "milestone.released",
+                    "workspace.issue_status_changed",
+                ],
+                is_active=idx % 5 != 0,
+            )
+            WebhookEndpoint.objects.filter(pk=endpoint.pk).update(created_at=now - timedelta(days=16 - idx))
+
+            delivery_specs = [
+                ("workspace.issue_status_changed", 200, True, "Accepted"),
+                ("milestone.released", 202, True, "Queued"),
+                ("job.status_changed", 500, False, "Remote timeout"),
+            ]
+            for delivery_idx, (event_type, status_code, succeeded, excerpt) in enumerate(delivery_specs, start=1):
+                delivery = WebhookDelivery.objects.create(
+                    endpoint=endpoint,
+                    event_type=event_type,
+                    payload={"username": user.username, "event": event_type, "attempt": delivery_idx},
+                    status_code=status_code,
+                    response_excerpt=excerpt,
+                    succeeded=succeeded,
+                )
+                WebhookDelivery.objects.filter(pk=delivery.pk).update(
+                    created_at=now - timedelta(days=6, hours=(idx + delivery_idx)),
+                )
+
+    def _create_moderation_and_fraud_data(self, users, requests, jobs, disputes, now):
+        request_values = list(requests.values())
+        job_values = list(jobs.values())
+        comment_values = list(Comment.objects.all()[:12])
+        dispute_values = list(disputes)
+
+        flag_specs = [
+            ("ananya_sharma", "request", request_values[0].pk, "Contains potential sensitive merchant info.", "reviewed", "karan_malhotra", "Redacted sensitive fields.", 36),
+            ("rohan_mehta", "job", job_values[0].pk, "Scope appears duplicated from earlier listing.", "open", None, "", 18),
+            ("priya_nair", "comment", comment_values[0].pk if comment_values else 1, "Comment tone violates collaboration norms.", "dismissed", "karan_malhotra", "No policy violation after context review.", 20),
+            ("vivek_iyer", "user", users["harshit_saxena"].pk, "Repeated aggressive behavior in proposal threads.", "actioned", "ananya_sharma", "User warned and temporarily limited.", 30),
+            ("devansh_jain", "dispute", dispute_values[0].pk if dispute_values else 1, "Need audit review for disputed milestone evidence.", "open", None, "", 10),
+            ("kavya_reddy", "request", request_values[2].pk, "Potential duplicate request from same team.", "reviewed", "ananya_sharma", "Merged with canonical issue thread.", 12),
+        ]
+        for reporter, target_type, target_id, reason, status, reviewed_by, note, hours_ago in flag_specs:
+            flag = ModerationFlag.objects.create(
+                reported_by=users[reporter],
+                target_type=target_type,
+                target_id=target_id,
+                reason=reason,
+                status=status,
+                reviewed_by=users.get(reviewed_by) if reviewed_by else None,
+                resolution_note=note,
+                resolved_at=(now - timedelta(hours=hours_ago - 2)) if status != "open" else None,
+            )
+            ModerationFlag.objects.filter(pk=flag.pk).update(created_at=now - timedelta(hours=hours_ago))
+
+        alert_specs = [
+            ("farhan_ali", "devansh_jain", "collusion", "high", "Repeated high-value closed-loop job pair in short window.", False, 72),
+            ("karan_malhotra", "arjun_verma", "unusual_pattern", "medium", "Milestone release pattern deviates from project baseline.", False, 58),
+            ("pooja_chawla", "siddharth_rao", "sla_breach", "low", "SLA reminder threshold crossed before first response.", True, 40),
+            ("rohan_mehta", "vivek_iyer", "transfer_velocity", "medium", "KP transfer velocity spike detected in 24-hour window.", False, 32),
+            ("ananya_sharma", "nikhil_banerjee", "unusual_pattern", "low", "Unusual query of payout endpoints from new IP range.", True, 24),
+        ]
+        for user_key, related_key, alert_type, severity, description, resolved, hours_ago in alert_specs:
+            alert = FraudAlert.objects.create(
+                user=users[user_key],
+                related_user=users[related_key],
+                alert_type=alert_type,
+                severity=severity,
+                description=description,
+                metadata={"seed": "indian_demo", "source": "risk_engine_v2"},
+                is_resolved=resolved,
+            )
+            created_at = now - timedelta(hours=hours_ago)
+            FraudAlert.objects.filter(pk=alert.pk).update(
+                created_at=created_at,
+                updated_at=created_at + timedelta(hours=3),
+            )
+
+    def _create_kp_transfer_data(self, users, now):
+        user_list = list(users.values())
+        transfer_counter = 0
+        for idx, sender in enumerate(user_list):
+            first_recipient = user_list[(idx + 3) % len(user_list)]
+            second_recipient = user_list[(idx + 7) % len(user_list)]
+            for recipient, amount in [(first_recipient, 6 + (idx % 5)), (second_recipient, 8 + (idx % 4))]:
+                if sender.pk == recipient.pk:
+                    continue
+                transfer = KPTransfer.objects.create(
+                    sender=sender,
+                    recipient=recipient,
+                    amount=amount,
+                )
+                KPTransfer.objects.filter(pk=transfer.pk).update(
+                    created_at=now - timedelta(hours=120 - transfer_counter),
+                )
+                transfer_counter += 1
+
+    def _create_attachment_data(self, users, requests, jobs, issues, now):
+        def create_attachment(target, uploader, caption, body, hours_ago, suffix):
+            attachment = Attachment.objects.create(
+                content_type=ContentType.objects.get_for_model(target.__class__),
+                object_id=target.pk,
+                uploaded_by=uploader,
+                file=ContentFile(body.encode("utf-8"), name=f"{uploader.username}_{suffix}.txt"),
+                caption=caption,
+            )
+            Attachment.objects.filter(pk=attachment.pk).update(
+                created_at=now - timedelta(hours=hours_ago),
+            )
+
+        request_items = list(requests.values())[:6]
+        for idx, req in enumerate(request_items, start=1):
+            create_attachment(
+                target=req,
+                uploader=req.user,
+                caption="Error logs and reproduction notes",
+                body=f"Request #{req.pk} debug notes from {req.user.username}",
+                hours_ago=70 - idx * 2,
+                suffix=f"request_{req.pk}",
+            )
+
+        job_items = list(jobs.values())[:5]
+        for idx, job in enumerate(job_items, start=1):
+            create_attachment(
+                target=job,
+                uploader=job.client,
+                caption="Scope brief and sample payloads",
+                body=f"Job #{job.pk} scope brief and payload examples.",
+                hours_ago=58 - idx * 2,
+                suffix=f"job_{job.pk}",
+            )
+
+        request_comments = list(Comment.objects.all()[:10])
+        for idx, comment in enumerate(request_comments, start=1):
+            create_attachment(
+                target=comment,
+                uploader=comment.user,
+                caption="Stack trace snippet",
+                body=f"Comment #{comment.pk} stack trace attachment.",
+                hours_ago=46 - idx,
+                suffix=f"comment_{comment.pk}",
+            )
+
+        for idx, issue in enumerate(issues[:10], start=1):
+            create_attachment(
+                target=issue,
+                uploader=issue.reporter,
+                caption="Issue context document",
+                body=f"Issue {issue.issue_key} context and acceptance criteria.",
+                hours_ago=38 - idx,
+                suffix=f"issue_{issue.pk}",
+            )
+
+    def _create_deliverables_data(self, milestones, users, now):
+        for key, milestone in milestones.items():
+            if milestone.status not in {"submitted", "released", "disputed"}:
+                continue
+            submitter = milestone.job.freelancer or milestone.job.client
+            deliverable = MilestoneDeliverable.objects.create(
+                milestone=milestone,
+                submitted_by=submitter,
+                proof_text=f"Deliverable evidence for {milestone.title}. Includes logs, screenshots, and test summary.",
+                status="submitted",
+            )
+            if milestone.status == "released":
+                deliverable.status = "approved"
+                deliverable.approved_at = milestone.released_at or (now - timedelta(hours=24))
+                deliverable.save(update_fields=["status", "approved_at", "updated_at"])
+            elif milestone.status == "disputed":
+                deliverable.status = "revision_requested"
+                deliverable.revision_note = "Please provide stronger proof for tenant-specific edge cases."
+                deliverable.requested_revision_at = now - timedelta(hours=36)
+                deliverable.save(
+                    update_fields=["status", "revision_note", "requested_revision_at", "updated_at"],
+                )
+            MilestoneDeliverable.objects.filter(pk=deliverable.pk).update(
+                created_at=now - timedelta(hours=90),
+            )
+
+    def _create_experiment_data(self, users, now):
+        experiment_specs = [
+            {
+                "name": "Matching Algorithm v2",
+                "slug": "matching-algo-v2",
+                "description": "Compare control ranking vs skill-boost opportunity ranking.",
+                "traffic": 100,
+                "variants": [("control", "Control", 50), ("skill_boost", "Skill Boost", 50)],
+            },
+            {
+                "name": "Compact Navigation Treatment",
+                "slug": "compact-nav-treatment",
+                "description": "Test reduced top-nav density for faster scanning.",
+                "traffic": 80,
+                "variants": [("baseline", "Baseline", 60), ("compact", "Compact", 40)],
+            },
+        ]
+
+        for spec in experiment_specs:
+            experiment = Experiment.objects.create(
+                name=spec["name"],
+                slug=spec["slug"],
+                description=spec["description"],
+                is_active=True,
+                traffic_percentage=spec["traffic"],
+                starts_at=now - timedelta(days=20),
+                ends_at=now + timedelta(days=20),
+            )
+            variants = []
+            for key, label, weight in spec["variants"]:
+                variant = ExperimentVariant.objects.create(
+                    experiment=experiment,
+                    key=key,
+                    label=label,
+                    weight=weight,
+                )
+                variants.append(variant)
+
+            user_list = list(users.values())
+            for idx, user in enumerate(user_list):
+                assigned_variant = variants[idx % len(variants)]
+                assignment = ExperimentAssignment.objects.create(
+                    experiment=experiment,
+                    variant=assigned_variant,
+                    user=user,
+                    session_key=f"seed-session-{experiment.slug}-{idx}",
+                )
+                ExperimentAssignment.objects.filter(pk=assignment.pk).update(
+                    created_at=now - timedelta(days=10, hours=idx),
+                )
+
+    def _expand_saved_search_activity(self, users, skills, tags, now):
+        tag_values = list(tags.values())
+        for idx, user in enumerate(users.values(), start=1):
+            user_skills = list(user.skills.all())
+            primary_skill = user_skills[0] if user_skills else skills["Python"]
+            secondary_skill = user_skills[1] if len(user_skills) > 1 else primary_skill
+            tag_a = tag_values[idx % len(tag_values)]
+            tag_b = tag_values[(idx + 7) % len(tag_values)]
+
+            first_search = SavedSearch.objects.create(
+                user=user,
+                query=f"{primary_skill.name.lower()} production fixes",
+                skill=primary_skill,
+                tag=tag_a,
+                is_active=True,
+                last_notified_at=now - timedelta(hours=14 + idx),
+            )
+            second_search = SavedSearch.objects.create(
+                user=user,
+                query=f"{secondary_skill.name.lower()} performance improvements",
+                skill=secondary_skill,
+                tag=tag_b,
+                is_active=idx % 3 != 0,
+                last_notified_at=now - timedelta(hours=10 + idx),
+            )
+            SavedSearch.objects.filter(pk=first_search.pk).update(created_at=now - timedelta(days=5, hours=idx))
+            SavedSearch.objects.filter(pk=second_search.pk).update(created_at=now - timedelta(days=3, hours=idx))
+
+            for note_idx, search in enumerate([first_search, second_search], start=1):
+                notif = Notification.objects.create(
+                    user=user,
+                    message=f"{2 + note_idx} new request(s) match your saved search '{search.query[:30]}...'.",
+                    link="/saved-searches/",
+                    is_read=note_idx % 2 == 0,
+                )
+                Notification.objects.filter(pk=notif.pk).update(
+                    created_at=now - timedelta(hours=6 + idx + note_idx),
+                )
+
     def _write_seed_credentials_file(self, users, password, generated_at, summary):
         lines = []
         lines.append("# Seeded Account Credentials")
@@ -1296,6 +2091,11 @@ class Command(BaseCommand):
         lines.append(f"- Help Requests: **{summary['help_requests']}**")
         lines.append(f"- Paid Jobs: **{summary['jobs']}**")
         lines.append(f"- Notifications: **{summary['notifications']}**")
+        lines.append(f"- Workspaces: **{summary['workspaces']}**")
+        lines.append(f"- Workspace Projects: **{summary['projects']}**")
+        lines.append(f"- Workspace Issues: **{summary['issues']}**")
+        lines.append(f"- Chat Messages: **{summary['chat_messages']}**")
+        lines.append(f"- Attachments: **{summary['attachments']}**")
         lines.append("")
         lines.append("| Full Name | Username | Password | Email |")
         lines.append("|---|---|---|---|")

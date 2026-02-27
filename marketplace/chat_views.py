@@ -2,6 +2,7 @@ from django.contrib import messages
 from django.contrib.auth.decorators import login_required
 from django.db import transaction
 from django.db.models import Max, Q
+from django.http import JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
 from django.utils import timezone
@@ -18,6 +19,29 @@ from .models import (
     WorkspaceMembership,
 )
 from .realtime import emit_user_event
+
+
+def _is_ajax_request(request):
+    """Return True when the request expects a JSON-style asynchronous response."""
+    return (
+        request.headers.get('x-requested-with') == 'XMLHttpRequest'
+        or 'application/json' in request.headers.get('accept', '')
+    )
+
+
+def _serialize_chat_message(chat_message):
+    """Serialize a chat message for realtime and AJAX responses."""
+    created_local = timezone.localtime(chat_message.created_at)
+    return {
+        'message_id': chat_message.pk,
+        'thread_id': chat_message.thread_id,
+        'sender_id': chat_message.sender_id,
+        'sender': chat_message.sender.username,
+        'content': chat_message.content,
+        'message': chat_message.content[:160],
+        'created_at_iso': chat_message.created_at.isoformat(),
+        'created_at_label': created_local.strftime('%b %d, %H:%M'),
+    }
 
 
 def _sync_thread_participants(thread, participant_ids):
@@ -42,13 +66,13 @@ def _broadcast_chat_message(chat_message):
     """Emit websocket event for all recipients in a thread except the sender."""
     thread = chat_message.thread
     link = reverse('chat_thread_detail', args=[thread.pk])
-    payload = {
-        'thread_id': thread.pk,
-        'thread_title': thread.display_title,
-        'sender': chat_message.sender.username,
-        'message': chat_message.content[:160],
-        'link': link,
-    }
+    payload = _serialize_chat_message(chat_message)
+    payload.update(
+        {
+            'thread_title': thread.display_title,
+            'link': link,
+        }
+    )
 
     recipient_ids = ChatThreadParticipant.objects.filter(thread=thread).exclude(
         user_id=chat_message.sender_id
@@ -144,9 +168,29 @@ def chat_thread_detail(request, thread_id):
                 ChatThreadParticipant.objects.filter(pk=participation.pk).update(last_read_at=chat_message.created_at)
 
             _broadcast_chat_message(chat_message)
+            if _is_ajax_request(request):
+                return JsonResponse({'ok': True, 'message': _serialize_chat_message(chat_message)})
             return redirect('chat_thread_detail', thread_id=thread.pk)
+        if _is_ajax_request(request):
+            return JsonResponse({'ok': False, 'errors': form.errors.get_json_data()}, status=400)
     else:
         form = ChatMessageForm()
+
+    after_id_param = request.GET.get('after_id')
+    if after_id_param is not None:
+        try:
+            after_id = int(after_id_param)
+        except (TypeError, ValueError):
+            return JsonResponse({'messages': []})
+
+        new_messages = list(
+            thread.messages.select_related('sender')
+            .filter(pk__gt=after_id)
+            .order_by('created_at')
+        )
+        if new_messages:
+            _mark_thread_as_read(participation)
+        return JsonResponse({'messages': [_serialize_chat_message(item) for item in new_messages]})
 
     chat_messages = list(
         thread.messages.select_related('sender').order_by('-created_at')[:120]

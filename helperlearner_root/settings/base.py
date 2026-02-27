@@ -194,6 +194,8 @@ AI_REQUEST_ASSIST_CACHE_SECONDS = config("AI_REQUEST_ASSIST_CACHE_SECONDS", defa
 AI_SUMMARY_CACHE_SECONDS = config("AI_SUMMARY_CACHE_SECONDS", default=3600, cast=int)
 PUBLIC_STATS_CACHE_SECONDS = config("PUBLIC_STATS_CACHE_SECONDS", default=45, cast=int)
 SLOW_REQUEST_THRESHOLD_MS = config("SLOW_REQUEST_THRESHOLD_MS", default=900, cast=int)
+READINESS_CHECK_CELERY = config("READINESS_CHECK_CELERY", default=False, cast=bool)
+READINESS_CHECK_CELERY_TIMEOUT_SECONDS = config("READINESS_CHECK_CELERY_TIMEOUT_SECONDS", default=2, cast=int)
 
 CELERY_BROKER_URL = config("CELERY_BROKER_URL", default=REDIS_URL or "redis://127.0.0.1:6379/0")
 CELERY_RESULT_BACKEND = config("CELERY_RESULT_BACKEND", default=CELERY_BROKER_URL)
@@ -248,13 +250,18 @@ if "test" in sys.argv:
 LOGGING = {
     "version": 1,
     "disable_existing_loggers": False,
+    "filters": {
+        "request_context": {
+            "()": "helperlearner_root.logging_context.RequestContextFilter",
+        },
+    },
     "formatters": {
         "verbose": {
-            "format": "{levelname} {asctime} {name} {message}",
+            "format": "{levelname} {asctime} {name} [req_id={request_id} user={request_user} method={request_method} path={request_path}] {message}",
             "style": "{",
         },
         "simple": {
-            "format": "{levelname} {message}",
+            "format": "{levelname} [req_id={request_id}] {message}",
             "style": "{",
         },
     },
@@ -262,6 +269,7 @@ LOGGING = {
         "console": {
             "class": "logging.StreamHandler",
             "formatter": "simple",
+            "filters": ["request_context"],
         },
         "file": {
             "class": "logging.handlers.RotatingFileHandler",
@@ -269,6 +277,7 @@ LOGGING = {
             "maxBytes": 1024 * 1024,
             "backupCount": 3,
             "formatter": "verbose",
+            "filters": ["request_context"],
         },
     },
     "loggers": {

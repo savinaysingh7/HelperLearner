@@ -56,3 +56,29 @@
     </div>
 </div>
 {% endblock %}
+
+{% block extra_js %}
+<script>
+    (function () {
+        var reloadScheduled = false;
+
+        function scheduleReload() {
+            if (reloadScheduled) {
+                return;
+            }
+            reloadScheduled = true;
+            window.setTimeout(function () {
+                window.location.reload();
+            }, 250);
+        }
+
+        window.addEventListener("hl:ws-event", function (event) {
+            var details = event && event.detail ? event.detail : null;
+            if (!details || details.event !== "chat.message") {
+                return;
+            }
+            scheduleReload();
+        });
+    })();
+</script>
+{% endblock %}

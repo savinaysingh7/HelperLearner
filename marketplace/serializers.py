@@ -2,7 +2,17 @@
 
 from accounts.models import CustomUser
 
-from .models import Comment, FreelanceJob, HelpRequest, JobMilestone, Skill
+from .models import (
+    Comment,
+    FreelanceJob,
+    HelpRequest,
+    JobMilestone,
+    Skill,
+    WorkspaceIssue,
+    WorkspaceIssueComment,
+    WorkspaceProject,
+    WorkspaceSprint,
+)
 
 
 class HelpRequestSerializer(serializers.ModelSerializer):
@@ -97,3 +107,76 @@ class FreelanceJobSerializer(serializers.ModelSerializer):
             'created_at',
             'updated_at',
         ]
+
+
+class WorkspaceSprintSerializer(serializers.ModelSerializer):
+    """Serializer for sprint metadata linked to workspace issues/projects."""
+
+    class Meta:
+        model = WorkspaceSprint
+        fields = ['id', 'name', 'status', 'start_date', 'end_date']
+
+
+class WorkspaceProjectSerializer(serializers.ModelSerializer):
+    """Serializer for workspace project boards with issue counters."""
+
+    workspace = serializers.CharField(source='workspace.slug', read_only=True)
+    issue_count = serializers.IntegerField(read_only=True)
+    open_count = serializers.IntegerField(read_only=True)
+
+    class Meta:
+        model = WorkspaceProject
+        fields = [
+            'id',
+            'workspace',
+            'name',
+            'key',
+            'description',
+            'is_active',
+            'issue_count',
+            'open_count',
+            'created_at',
+            'updated_at',
+        ]
+
+
+class WorkspaceIssueSerializer(serializers.ModelSerializer):
+    """Serializer for workspace issues in Jira-style board APIs."""
+
+    issue_key = serializers.CharField(read_only=True)
+    project = serializers.CharField(source='project.key', read_only=True)
+    workspace = serializers.CharField(source='project.workspace.slug', read_only=True)
+    reporter = serializers.CharField(source='reporter.username', read_only=True)
+    assignee = serializers.CharField(source='assignee.username', read_only=True)
+    sprint = WorkspaceSprintSerializer(read_only=True)
+
+    class Meta:
+        model = WorkspaceIssue
+        fields = [
+            'id',
+            'issue_key',
+            'project',
+            'workspace',
+            'title',
+            'description',
+            'status',
+            'priority',
+            'reporter',
+            'assignee',
+            'estimate_points',
+            'sprint',
+            'due_date',
+            'resolved_at',
+            'created_at',
+            'updated_at',
+        ]
+
+
+class WorkspaceIssueCommentSerializer(serializers.ModelSerializer):
+    """Serializer for timeline comments on workspace issues."""
+
+    author = serializers.CharField(source='author.username', read_only=True)
+
+    class Meta:
+        model = WorkspaceIssueComment
+        fields = ['id', 'author', 'content', 'created_at', 'updated_at']

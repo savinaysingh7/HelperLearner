@@ -123,66 +123,51 @@
 </div>
 
 <div class="row g-3 mb-4">
-    <div class="col-12 col-md-6 col-xl-3">
+    <div class="col-12 col-xl-8">
         <div class="surface-card h-100 quick-action-tile">
             <div class="card-body">
-                <div class="d-flex justify-content-between align-items-start mb-2">
-                    <h2 class="h6 mb-0">Paid Jobs</h2>
-                    <i class="bi bi-briefcase text-primary"></i>
+                <div class="d-flex justify-content-between align-items-start gap-3 mb-3">
+                    <div>
+                        <h2 class="h5 mb-1">Action Center</h2>
+                        <p class="small text-muted mb-0">Your most-used actions in one place.</p>
+                    </div>
+                    <i class="bi bi-lightning-charge fs-5 text-info"></i>
                 </div>
-                <p class="small text-muted mb-2">Posted: {{ paid_jobs_posted }} &middot; Completed: {{ paid_jobs_completed }} &middot; Taken: {{ paid_jobs_taken }}</p>
-                <div class="small text-muted mb-3">Total INR earned: &#8377;{{ paid_income }}</div>
-                <a href="{% url 'freelance_job_list' %}" class="btn btn-outline-primary btn-sm">Browse Jobs</a>
-            </div>
-        </div>
-    </div>
-    <div class="col-12 col-md-6 col-xl-3">
-        <div class="surface-card h-100 quick-action-tile">
-            <div class="card-body">
-                <div class="d-flex justify-content-between align-items-start mb-2">
-                    <h2 class="h6 mb-0">INR Wallet</h2>
-                    <i class="bi bi-wallet2 text-success"></i>
-                </div>
-                <p class="small text-muted mb-2">Current balance: &#8377;{{ request.user.wallet_inr }}</p>
-                <div class="small text-muted mb-3">Compliance:
-                    {% if request.user.compliance_verified %}
-                        <span class="badge text-bg-success">Verified</span>
-                    {% else %}
-                        <span class="badge text-bg-warning">Pending</span>
-                    {% endif %}
-                </div>
-                <a href="{% url 'wallet_overview' %}" class="btn btn-outline-primary btn-sm">Open Wallet</a>
-            </div>
-        </div>
-    </div>
-    <div class="col-12 col-md-6 col-xl-3">
-        <div class="surface-card h-100 quick-action-tile">
-            <div class="card-body">
-                <div class="d-flex justify-content-between align-items-start mb-2">
-                    <h2 class="h6 mb-0">Daily Bonus</h2>
-                    <i class="bi bi-coin text-warning"></i>
+                <div class="dashboard-action-grid mb-3">
+                    <a href="{% url 'claim_daily_kp' %}" class="btn btn-primary btn-sm"><i class="bi bi-coin me-1"></i>Claim Daily Bonus</a>
+                    <a href="{% url 'transfer_kp' %}" class="btn btn-outline-primary btn-sm"><i class="bi bi-arrow-left-right me-1"></i>Transfer KP</a>
+                    <a href="{% url 'create_request' %}" class="btn btn-outline-secondary btn-sm"><i class="bi bi-journal-plus me-1"></i>Post Request</a>
+                    <a href="{% url 'post_freelance_job' %}" class="btn btn-outline-secondary btn-sm"><i class="bi bi-briefcase me-1"></i>Post Paid Job</a>
+                    <a href="{% url 'workspace_list' %}" class="btn btn-outline-secondary btn-sm"><i class="bi bi-diagram-3 me-1"></i>Workspaces</a>
+                    <a href="{% url 'recommendations' %}" class="btn btn-outline-secondary btn-sm"><i class="bi bi-stars me-1"></i>Recommendations</a>
                 </div>
                 {% if next_bonus_hours == 0 %}
-                    <p class="small text-muted mb-3">You can claim your +10 KP bonus now.</p>
+                    <div class="small text-success"><i class="bi bi-check-circle me-1"></i>Daily bonus is available now.</div>
                 {% else %}
-                    <p class="small text-muted mb-3">Next bonus in {{ next_bonus_hours }} hour{{ next_bonus_hours|pluralize }}.</p>
+                    <div class="small text-muted"><i class="bi bi-clock-history me-1"></i>Next daily bonus in {{ next_bonus_hours }} hour{{ next_bonus_hours|pluralize }}.</div>
                 {% endif %}
-                <a href="{% url 'claim_daily_kp' %}" class="btn btn-outline-primary btn-sm">Claim Bonus</a>
             </div>
         </div>
     </div>
-    <div class="col-12 col-md-6 col-xl-3">
+    <div class="col-12 col-xl-4">
         <div class="surface-card h-100 quick-action-tile">
             <div class="card-body">
-                <div class="d-flex justify-content-between align-items-start mb-2">
-                    <h2 class="h6 mb-0">Quick Links</h2>
-                    <i class="bi bi-lightning-charge text-info"></i>
-                </div>
-                <div class="d-grid gap-2">
-                    <a href="{% url 'workspace_list' %}" class="btn btn-outline-secondary btn-sm">Workspaces</a>
-                    <a href="{% url 'recommendations' %}" class="btn btn-outline-secondary btn-sm">Recommendations</a>
-                    <a href="{% url 'integrations_settings' %}" class="btn btn-outline-secondary btn-sm">Integrations</a>
-                </div>
+                <h2 class="h6 mb-3">Marketplace Snapshot</h2>
+                <ul class="list-unstyled action-queue-list mb-3">
+                    <li><span>Paid jobs posted</span><strong>{{ paid_jobs_posted }}</strong></li>
+                    <li><span>Paid jobs completed</span><strong>{{ paid_jobs_completed }}</strong></li>
+                    <li><span>Paid jobs taken</span><strong>{{ paid_jobs_taken }}</strong></li>
+                    <li><span>Total INR earned</span><strong>&#8377;{{ paid_income }}</strong></li>
+                    <li>
+                        <span>Compliance</span>
+                        {% if request.user.compliance_verified %}
+                            <strong class="text-success">Verified</strong>
+                        {% else %}
+                            <strong class="text-warning">Pending</strong>
+                        {% endif %}
+                    </li>
+                </ul>
+                <a href="{% url 'wallet_overview' %}" class="btn btn-outline-primary btn-sm w-100">Open INR Wallet</a>
             </div>
         </div>
     </div>

@@ -5,6 +5,11 @@ import uuid
 from django.conf import settings
 from django.http import HttpResponseForbidden
 
+from helperlearner_root.logging_context import (
+    reset_request_context,
+    set_request_context,
+    update_request_user,
+)
 from marketplace.experiments import assign_active_experiments
 
 logger = logging.getLogger(__name__)
@@ -48,12 +53,24 @@ class RequestMetricsMiddleware:
     def __call__(self, request):
         request_id = request.headers.get('X-Request-ID') or str(uuid.uuid4())
         request.request_id = request_id
+        context_tokens = set_request_context(
+            request_id=request_id,
+            request_path=request.path,
+            request_method=request.method,
+        )
         start = time.perf_counter()
         slow_threshold_ms = getattr(settings, 'SLOW_REQUEST_THRESHOLD_MS', 900)
+        response = None
 
         try:
             response = self.get_response(request)
         except Exception:
+            user_label = (
+                request.user.username
+                if getattr(request, 'user', None) and request.user.is_authenticated
+                else 'anonymous'
+            )
+            update_request_user(user_label)
             duration_ms = (time.perf_counter() - start) * 1000
             logger.exception(
                 'Request failed request_id=%s method=%s path=%s duration_ms=%.2f',
@@ -63,20 +80,30 @@ class RequestMetricsMiddleware:
                 duration_ms,
             )
             raise
+        finally:
+            if response is not None:
+                duration_ms = (time.perf_counter() - start) * 1000
+                user = (
+                    request.user.username
+                    if getattr(request, 'user', None) and request.user.is_authenticated
+                    else 'anonymous'
+                )
+                update_request_user(user)
+                response['X-Request-ID'] = request_id
+                response['X-Response-Time-ms'] = f'{duration_ms:.2f}'
 
-        duration_ms = (time.perf_counter() - start) * 1000
-        response['X-Request-ID'] = request_id
-        response['X-Response-Time-ms'] = f'{duration_ms:.2f}'
+                if duration_ms >= slow_threshold_ms:
+                    logger.warning(
+                        'Slow request request_id=%s method=%s path=%s status=%s user=%s duration_ms=%.2f',
+                        request_id,
+                        request.method,
+                        request.path,
+                        getattr(response, 'status_code', 'unknown'),
+                        user,
+                        duration_ms,
+                    )
 
-        if duration_ms >= slow_threshold_ms:
-            user = request.user.username if getattr(request, 'user', None) and request.user.is_authenticated else 'anonymous'
-            logger.warning(
-                'Slow request request_id=%s method=%s path=%s status=%s user=%s duration_ms=%.2f',
-                request_id,
-                request.method,
-                request.path,
-                getattr(response, 'status_code', 'unknown'),
-                user,
-                duration_ms,
-            )
+            update_request_user('-')
+            reset_request_context(context_tokens)
+
         return response

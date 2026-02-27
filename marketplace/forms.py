@@ -24,7 +24,9 @@ from .models import (
     WebhookEndpoint,
     Workspace,
     WorkspaceIssue,
+    WorkspaceIssueComment,
     WorkspaceProject,
+    WorkspaceSprint,
 )
 
 
@@ -570,7 +572,7 @@ class WorkspaceIssueForm(forms.ModelForm):
 
     class Meta:
         model = WorkspaceIssue
-        fields = ['title', 'description', 'status', 'priority', 'assignee', 'estimate_points', 'due_date']
+        fields = ['title', 'description', 'status', 'priority', 'assignee', 'estimate_points', 'sprint', 'due_date']
         widgets = {
             'title': forms.TextInput(attrs={'class': 'form-control', 'placeholder': 'Issue title'}),
             'description': forms.Textarea(attrs={'class': 'form-control', 'rows': 4}),
@@ -578,15 +580,60 @@ class WorkspaceIssueForm(forms.ModelForm):
             'priority': forms.Select(attrs={'class': 'form-select'}),
             'assignee': forms.Select(attrs={'class': 'form-select'}),
             'estimate_points': forms.NumberInput(attrs={'class': 'form-control', 'min': 1, 'step': 1}),
+            'sprint': forms.Select(attrs={'class': 'form-select'}),
             'due_date': forms.DateInput(attrs={'class': 'form-control', 'type': 'date'}),
         }
 
     def __init__(self, *args, **kwargs):
         self.workspace = kwargs.pop('workspace', None)
+        self.project = kwargs.pop('project', None)
         super().__init__(*args, **kwargs)
         if self.workspace:
             member_ids = self.workspace.memberships.values_list('user_id', flat=True)
             self.fields['assignee'].queryset = self.fields['assignee'].queryset.filter(pk__in=member_ids)
+            sprint_qs = WorkspaceSprint.objects.filter(project__workspace=self.workspace)
+            if self.project:
+                sprint_qs = sprint_qs.filter(project=self.project)
+            self.fields['sprint'].queryset = sprint_qs.order_by('-start_date', '-created_at')
+
+
+class WorkspaceSprintForm(forms.ModelForm):
+    """Form for creating/editing a project sprint window."""
+
+    class Meta:
+        model = WorkspaceSprint
+        fields = ['name', 'goal', 'start_date', 'end_date', 'status']
+        widgets = {
+            'name': forms.TextInput(attrs={'class': 'form-control', 'placeholder': 'e.g., Sprint 12'}),
+            'goal': forms.TextInput(attrs={'class': 'form-control', 'placeholder': 'Primary sprint goal'}),
+            'start_date': forms.DateInput(attrs={'class': 'form-control', 'type': 'date'}),
+            'end_date': forms.DateInput(attrs={'class': 'form-control', 'type': 'date'}),
+            'status': forms.Select(attrs={'class': 'form-select'}),
+        }
+
+
+class WorkspaceIssueCommentForm(forms.ModelForm):
+    """Form for posting comments on workspace issues."""
+
+    class Meta:
+        model = WorkspaceIssueComment
+        fields = ['content']
+        widgets = {
+            'content': forms.Textarea(
+                attrs={
+                    'class': 'form-control',
+                    'rows': 3,
+                    'placeholder': 'Add context, blockers, links, or acceptance notes...',
+                    'maxlength': 2000,
+                }
+            ),
+        }
+
+    def clean_content(self):
+        content = (self.cleaned_data.get('content') or '').strip()
+        if not content:
+            raise forms.ValidationError('Comment cannot be empty.')
+        return content
 
 
 class PortfolioItemForm(forms.ModelForm):

@@ -8,6 +8,8 @@ router.register(r'requests', views.HelpRequestViewSet, basename='request')
 router.register(r'jobs', views.FreelanceJobViewSet, basename='api-job')
 router.register(r'users', views.UserViewSet, basename='api-user')
 router.register(r'skills', views.SkillViewSet, basename='api-skill')
+router.register(r'workspace-projects', views.WorkspaceProjectViewSet, basename='api-workspace-project')
+router.register(r'workspace-issues', views.WorkspaceIssueViewSet, basename='api-workspace-issue')
 
 urlpatterns = [
     path('', views.home, name='home'),
@@ -88,6 +90,21 @@ urlpatterns = [
         'workspaces/<slug:slug>/projects/<int:project_id>/issues/<int:issue_id>/transition/',
         jira_views.workspace_issue_transition,
         name='workspace_issue_transition',
+    ),
+    path(
+        'workspaces/<slug:slug>/projects/<int:project_id>/sprints/create/',
+        jira_views.workspace_sprint_create,
+        name='workspace_sprint_create',
+    ),
+    path(
+        'workspaces/<slug:slug>/projects/<int:project_id>/sprints/<int:sprint_id>/start/',
+        jira_views.workspace_sprint_start,
+        name='workspace_sprint_start',
+    ),
+    path(
+        'workspaces/<slug:slug>/projects/<int:project_id>/sprints/<int:sprint_id>/complete/',
+        jira_views.workspace_sprint_complete,
+        name='workspace_sprint_complete',
     ),
     path('workspaces/<slug:slug>/invite/', advanced_views.workspace_invite_member, name='workspace_invite_member'),
     path('workspaces/<slug:slug>/deposit/', advanced_views.workspace_deposit, name='workspace_deposit'),

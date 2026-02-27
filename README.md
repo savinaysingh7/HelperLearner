@@ -27,6 +27,7 @@ HelperLearner is a Django 6 knowledge marketplace where users post help requests
 - Trust Score v2 breakdown (on-time %, dispute %, response time, streak).
 - Risk/fraud checks for collusion and KP transfer velocity/patterns.
 - Team workspaces with shared wallet and role permissions.
+- Jira-style workspace project boards with issue tracking, transitions, and activity logs.
 - Realtime chat inbox with request/job/workspace conversation rooms.
 - Generic attachment uploads for requests, jobs, and comments.
 - API keys + webhook delivery logs for external integrations.
@@ -109,6 +110,8 @@ If `sentry-sdk` is installed and `SENTRY_DSN` is set, Sentry is initialized auto
 Set:
 - `CELERY_BROKER_URL`
 - `CELERY_RESULT_BACKEND`
+- `READINESS_CHECK_CELERY` (optional, default `False`; when `True`, `/readyz/` verifies broker reachability)
+- `READINESS_CHECK_CELERY_TIMEOUT_SECONDS` (optional, default `2`)
 
 Background schedules are configured for:
 - request expiry
@@ -160,16 +163,25 @@ python manage.py run_sla_engine
 
 ## Web Endpoints
 - `GET /healthz/` lightweight health check endpoint for uptime probes
-- `GET /readyz/` readiness probe (database + cache checks)
+- `GET /readyz/` readiness probe (database + cache checks, optional Celery broker check)
 - `GET /search/?q=` unified search page for requests/users/skills
 - `GET /feed/` personalized activity feed (login required)
 - `GET /chat/` unified chat inbox for all conversation threads (login required)
-- `GET,POST /chat/thread/<id>/` view and send messages in a thread (login required)
+- `GET,POST /chat/thread/<id>/` view and send messages in a thread (login required, supports async send + `?after_id=` polling)
 - `GET,POST /saved-searches/` create/manage saved request filters
 - `GET /recommendations/` personalized ranked opportunities
 - `GET,POST /workspaces/` create and browse team workspaces
 - `GET /workspaces/<slug>/` workspace members + shared wallet ledger
 - `GET /workspaces/<slug>/chat/` workspace group chat room
+- `GET,POST /workspaces/<slug>/projects/` workspace project list + create board (owner/admin create)
+- `GET /workspaces/<slug>/projects/<project_id>/` Kanban board for a workspace project
+- `GET,POST /workspaces/<slug>/projects/<project_id>/issues/new/` create issue
+- `GET,POST /workspaces/<slug>/projects/<project_id>/issues/<issue_id>/` issue detail + activity timeline + comments
+- `GET,POST /workspaces/<slug>/projects/<project_id>/issues/<issue_id>/edit/` edit issue
+- `POST /workspaces/<slug>/projects/<project_id>/issues/<issue_id>/transition/` move issue status lane
+- `POST /workspaces/<slug>/projects/<project_id>/sprints/create/` create sprint window
+- `POST /workspaces/<slug>/projects/<project_id>/sprints/<sprint_id>/start/` activate sprint
+- `POST /workspaces/<slug>/projects/<project_id>/sprints/<sprint_id>/complete/` complete sprint
 - `GET,POST /kp/claim-daily/` daily +10 KP claim (24-hour cooldown)
 - `GET,POST /kp/transfer/` confirmed KP transfer flow
 - `GET,POST /accounts/profile/edit/` includes notification preference management
@@ -213,6 +225,9 @@ All endpoints are paginated (`page_size=10`).
 - `GET /api/jobs/` (filters: `status`, `skill`, `payment_type`)
 - `GET /api/users/` (username, avg_rating, trust_score, knowledge_points, skills)
 - `GET /api/skills/` (skill + request_count)
+- `GET /api/workspace-projects/` (authenticated; member-scoped projects with issue counters)
+- `GET /api/workspace-issues/` (authenticated; filters: `project`, `workspace`, `status`, `priority`, `assignee`, `sprint`)
+- `GET /api/workspace-issues/<id>/comments/` (authenticated; issue comments for member-visible issues)
 - `GET /api/search/?q=` (grouped `requests`, `users`, `skills`)
 
 Realtime websocket endpoint (when Channels is installed):
@@ -251,7 +266,7 @@ python manage.py seed_indian_demo_data --drop-superusers
    - `python manage.py test`
 2. Runtime checks:
    - hit `/healthz/` for liveness
-   - hit `/readyz/` for DB/cache readiness
+   - hit `/readyz/` for DB/cache readiness (and broker readiness when `READINESS_CHECK_CELERY=True`)
 3. Scheduled workflows:
    - run Celery worker + beat or cron equivalents for `expire_requests`, `notify_saved_searches`, `run_sla_engine`
 4. Incident baseline:

@@ -25,6 +25,7 @@ from django_ratelimit.decorators import ratelimit
 from django_filters.rest_framework import DjangoFilterBackend
 from rest_framework import mixins, viewsets
 from rest_framework.decorators import action
+from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 
 from accounts.models import CustomUser
@@ -66,6 +67,8 @@ from .models import (
     Tag,
     TrustSignal,
     WalletLedger,
+    WorkspaceIssue,
+    WorkspaceProject,
 )
 from .serializers import (
     FreelanceJobSerializer,
@@ -73,6 +76,9 @@ from .serializers import (
     PublicCommentSerializer,
     PublicUserSerializer,
     SkillSerializer,
+    WorkspaceIssueCommentSerializer,
+    WorkspaceIssueSerializer,
+    WorkspaceProjectSerializer,
 )
 from .services import evaluate_job_collusion, record_wallet_entry
 from .webhooks import dispatch_webhook_event
@@ -2098,6 +2104,77 @@ class SkillViewSet(mixins.ListModelMixin, viewsets.GenericViewSet):
 
     queryset = Skill.objects.annotate(request_count=Count('helprequest', distinct=True)).order_by('name')
     serializer_class = SkillSerializer
+
+
+class WorkspaceIssueFilter(django_filters.FilterSet):
+    """Allow filtering of workspace issues by project/workspace/status/priority/assignee."""
+
+    project = django_filters.NumberFilter(field_name='project_id')
+    workspace = django_filters.CharFilter(field_name='project__workspace__slug')
+    status = django_filters.CharFilter(field_name='status')
+    priority = django_filters.CharFilter(field_name='priority')
+    assignee = django_filters.NumberFilter(field_name='assignee_id')
+    sprint = django_filters.NumberFilter(field_name='sprint_id')
+
+    class Meta:
+        model = WorkspaceIssue
+        fields = ['project', 'workspace', 'status', 'priority', 'assignee', 'sprint']
+
+
+class WorkspaceProjectViewSet(viewsets.ReadOnlyModelViewSet):
+    """Browsable API endpoint for workspace projects visible to the authenticated member."""
+
+    serializer_class = WorkspaceProjectSerializer
+    permission_classes = [IsAuthenticated]
+
+    def get_queryset(self):
+        return (
+            WorkspaceProject.objects.select_related('workspace', 'created_by')
+            .annotate(
+                issue_count=Count('issues', distinct=True),
+                open_count=Count('issues', filter=~Q(issues__status='done'), distinct=True),
+            )
+            .filter(workspace__memberships__user=self.request.user)
+            .order_by('workspace__name', 'name')
+            .distinct()
+        )
+
+
+class WorkspaceIssueViewSet(viewsets.ReadOnlyModelViewSet):
+    """Browsable API endpoint for workspace issues visible to authenticated workspace members."""
+
+    serializer_class = WorkspaceIssueSerializer
+    permission_classes = [IsAuthenticated]
+    filter_backends = [DjangoFilterBackend]
+    filterset_class = WorkspaceIssueFilter
+
+    def get_queryset(self):
+        return (
+            WorkspaceIssue.objects.select_related(
+                'project',
+                'project__workspace',
+                'reporter',
+                'assignee',
+                'sprint',
+            )
+            .filter(project__workspace__memberships__user=self.request.user)
+            .order_by('-updated_at')
+            .distinct()
+        )
+
+    @action(detail=True, methods=['get'], url_path='comments')
+    def comments(self, request, pk=None):
+        """Return issue comments visible to current workspace members."""
+        issue = self.get_object()
+        comments_qs = issue.comments.select_related('author').order_by('-created_at')
+
+        page = self.paginate_queryset(comments_qs)
+        if page is not None:
+            serializer = WorkspaceIssueCommentSerializer(page, many=True)
+            return self.get_paginated_response(serializer.data)
+
+        serializer = WorkspaceIssueCommentSerializer(comments_qs, many=True)
+        return Response(serializer.data)
 
 
 class SearchViewSet(viewsets.ViewSet):

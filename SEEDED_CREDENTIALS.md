@@ -1,6 +1,6 @@
 # Seeded Account Credentials
 
-Generated: 2026-02-26 14:40:53 UTC
+Generated: 2026-02-27 06:41:27 UTC
 
 This dataset was reseeded with realistic Indian developer personas and feature-rich activity.
 All seeded accounts use the same password: `IndiaSeed@2026`
@@ -18,7 +18,12 @@ All seeded accounts use the same password: `IndiaSeed@2026`
 - Users: **22**
 - Help Requests: **13**
 - Paid Jobs: **8**
-- Notifications: **25**
+- Notifications: **69**
+- Workspaces: **4**
+- Workspace Projects: **8**
+- Workspace Issues: **48**
+- Chat Messages: **148**
+- Attachments: **31**
 
 | Full Name | Username | Password | Email |
 |---|---|---|---|

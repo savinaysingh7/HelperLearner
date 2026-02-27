@@ -13,6 +13,11 @@
 
         <div class="card">
             <div class="card-body">
+                <div class="results-toolbar d-flex justify-content-between align-items-center mb-3">
+                    <span class="small text-muted">{{ page_obj.paginator.count }} update{{ page_obj.paginator.count|pluralize }}</span>
+                    <a href="{% url 'request_list' %}" class="btn btn-outline-secondary btn-sm">Browse All Requests</a>
+                </div>
+                <div class="feed-stream">
                 {% for item in feed_items %}
                     <article class="feed-item {% if item.type == 'interaction_post' %}event-post{% elif item.type == 'skill_match_open' %}event-skill{% else %}event-resolved{% endif %} border rounded-3 p-3 mb-3 d-flex gap-3">
                         <div class="feed-icon fs-5"><i class="bi {{ item.icon }}"></i></div>
@@ -32,6 +37,7 @@
                         <p class="text-muted mb-0">As you interact with requests, personalized events will appear here.</p>
                     </div>
                 {% endfor %}
+                </div>
 
                 {% if page_obj.paginator.num_pages > 1 %}
                     <nav aria-label="Feed pages" class="mt-4">
@@ -65,22 +71,27 @@
     <aside class="col-12 col-xl-4">
         <div class="card">
             <div class="card-body">
-                <h2 class="h5 mb-3">Suggested Requests</h2>
-                {% for req in suggested_requests %}
-                    <article class="request-card border rounded-3 p-3 mb-3">
-                        <a href="{% url 'request_detail' req.pk %}" class="fw-semibold text-decoration-none d-block mb-1">{{ req.title }}</a>
-                        <div class="small text-muted mb-2">Posted by {{ req.user.username }}</div>
-                        <div class="d-flex justify-content-between align-items-center">
-                            <span class="badge badge-soft">{{ req.skill_needed|default:'General' }}</span>
-                            <span class="fw-semibold text-success">{{ req.kp_bounty }} KP</span>
+                <div class="d-flex justify-content-between align-items-center mb-3">
+                    <h2 class="h5 mb-0">Suggested Requests</h2>
+                    <a href="{% url 'request_list' %}" class="small text-decoration-none">See all</a>
+                </div>
+                <div class="list-group list-group-flush suggested-list">
+                    {% for req in suggested_requests %}
+                        <a href="{% url 'request_detail' req.pk %}" class="list-group-item list-group-item-action d-flex justify-content-between align-items-start gap-2">
+                            <div>
+                                <div class="fw-semibold mb-1">{{ req.title }}</div>
+                                <div class="small text-muted mb-1">by {{ req.user.username }}</div>
+                                <span class="badge badge-soft">{{ req.skill_needed|default:'General' }}</span>
+                            </div>
+                            <strong class="text-success text-nowrap">{{ req.kp_bounty }} KP</strong>
+                        </a>
+                    {% empty %}
+                        <div class="empty-state text-center py-4">
+                            <div class="icon"><i class="bi bi-stars"></i></div>
+                            <p class="text-muted mb-0 mt-2">No new suggested requests right now.</p>
                         </div>
-                    </article>
-                {% empty %}
-                    <div class="empty-state text-center py-4">
-                        <div class="icon"><i class="bi bi-stars"></i></div>
-                        <p class="text-muted mb-0 mt-2">No new suggested requests right now.</p>
-                    </div>
-                {% endfor %}
+                    {% endfor %}
+                </div>
             </div>
         </div>
     </aside>
