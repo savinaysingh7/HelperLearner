@@ -46,7 +46,7 @@
                                     class="nav-link {% if current_name == 'request_list' or current_name == 'request_detail' or current_name == 'claim_request' or current_name == 'resolve_request' or current_name == 'cancel_request' or current_name == 'delete_request' or current_name == 'rate_request' or current_name == 'search' %}active{% endif %}"
                                     href="{% url 'request_list' %}"
                                     {% if current_name == 'request_list' or current_name == 'request_detail' or current_name == 'claim_request' or current_name == 'resolve_request' or current_name == 'cancel_request' or current_name == 'delete_request' or current_name == 'rate_request' or current_name == 'search' %}aria-current="page"{% endif %}
-                                >Browse</a>
+                                >Requests</a>
                             </li>
                             <li class="nav-item">
                                 <a
@@ -54,13 +54,6 @@
                                     href="{% url 'freelance_job_list' %}"
                                     {% if current_name == 'freelance_job_list' or current_name == 'post_freelance_job' or current_name == 'freelance_job_detail' %}aria-current="page"{% endif %}
                                 >Jobs</a>
-                            </li>
-                            <li class="nav-item">
-                                <a
-                                    class="nav-link {% if current_name == 'leaderboard' %}active{% endif %}"
-                                    href="{% url 'leaderboard' %}"
-                                    {% if current_name == 'leaderboard' %}aria-current="page"{% endif %}
-                                >Leaderboard</a>
                             </li>
                             {% if user.is_authenticated %}
                                 <li class="nav-item">
@@ -71,6 +64,13 @@
                                     >Workspaces</a>
                                 </li>
                             {% endif %}
+                            <li class="nav-item">
+                                <a
+                                    class="nav-link {% if current_name == 'leaderboard' %}active{% endif %}"
+                                    href="{% url 'leaderboard' %}"
+                                    {% if current_name == 'leaderboard' %}aria-current="page"{% endif %}
+                                >Leaderboard</a>
+                            </li>
                         </ul>
 
                         <form class="nav-search my-2 my-lg-0 ms-lg-auto" role="search" action="{% url 'search' %}" method="get">
@@ -82,7 +82,7 @@
                                     id="globalSearchInput"
                                     name="q"
                                     value="{{ request.GET.q|default:'' }}"
-                                    placeholder="Search requests, users, skills"
+                                    placeholder="Search everything"
                                     aria-label="Search"
                                 >
                                 <span class="input-group-text search-kbd">/</span>
@@ -105,12 +105,42 @@
                                         <li><a class="dropdown-item" href="{% url 'post_freelance_job' %}">Post Paid Job</a></li>
                                     </ul>
                                 </div>
+                                <a
+                                    href="{% url 'chat_inbox' %}"
+                                    class="btn btn-outline-light btn-sm nav-icon-btn position-relative {% if current_name == 'chat_inbox' or current_name == 'chat_thread_detail' %}active{% endif %}"
+                                    aria-label="Open chats"
+                                    title="Chats"
+                                >
+                                    <i class="bi bi-chat-dots"></i>
+                                    {% if unread_chat_threads_count %}
+                                        <span id="chatBadge" class="badge rounded-pill text-bg-info nav-badge" data-count="{{ unread_chat_threads_count|default:0 }}">
+                                            {% if unread_chat_threads_count > 99 %}99+{% else %}{{ unread_chat_threads_count|default:0 }}{% endif %}
+                                        </span>
+                                    {% else %}
+                                        <span id="chatBadge" class="badge rounded-pill text-bg-info nav-badge d-none" data-count="0">0</span>
+                                    {% endif %}
+                                </a>
+                                <a
+                                    href="{% url 'notification_list' %}"
+                                    class="btn btn-outline-light btn-sm nav-icon-btn position-relative {% if current_name == 'notification_list' %}active{% endif %}"
+                                    aria-label="Open notifications"
+                                    title="Notifications"
+                                >
+                                    <i class="bi bi-bell"></i>
+                                    {% if unread_notifications_count %}
+                                        <span id="notificationBadge" class="badge rounded-pill text-bg-danger nav-badge" data-count="{{ unread_notifications_count|default:0 }}">
+                                            {% if unread_notifications_count > 99 %}99+{% else %}{{ unread_notifications_count|default:0 }}{% endif %}
+                                        </span>
+                                    {% else %}
+                                        <span id="notificationBadge" class="badge rounded-pill text-bg-danger nav-badge d-none" data-count="0">0</span>
+                                    {% endif %}
+                                </a>
                                 <span class="nav-kp-pill"><i class="bi bi-coin me-1"></i>{{ user.knowledge_points }} KP</span>
                                 <div class="dropdown">
                                     <button class="btn btn-outline-light btn-sm dropdown-toggle nav-user-btn" type="button" data-bs-toggle="dropdown" aria-expanded="false">
                                         <i class="bi bi-person-circle me-1"></i>{{ user.username }}
                                     </button>
-                                    <ul class="dropdown-menu dropdown-menu-end">
+                                    <ul class="dropdown-menu dropdown-menu-end nav-tools-menu">
                                         <li class="px-2 py-2 nav-user-summary">
                                             <div class="small text-muted mb-1">Signed in as</div>
                                             <div class="fw-semibold mb-2">{{ user.username }}</div>
@@ -120,42 +150,20 @@
                                             </div>
                                         </li>
                                         <li><hr class="dropdown-divider"></li>
+                                        <li class="dropdown-header menu-section-title">Workspace &amp; Activity</li>
                                         <li><a class="dropdown-item {% if current_name == 'dashboard' %}active{% endif %}" href="{% url 'dashboard' %}">Dashboard</a></li>
                                         <li><a class="dropdown-item {% if current_name == 'activity_feed' %}active{% endif %}" href="{% url 'activity_feed' %}">Activity Feed</a></li>
                                         <li><a class="dropdown-item {% if current_name == 'saved_searches' %}active{% endif %}" href="{% url 'saved_searches' %}">Saved Searches</a></li>
                                         <li><a class="dropdown-item {% if current_name == 'recommendations' %}active{% endif %}" href="{% url 'recommendations' %}">Recommendations</a></li>
+                                        <li><hr class="dropdown-divider"></li>
+                                        <li class="dropdown-header menu-section-title">Account</li>
+                                        <li><a class="dropdown-item {% if current_name == 'profile' %}active{% endif %}" href="{% url 'profile' %}">My Profile</a></li>
                                         <li><a class="dropdown-item {% if current_name == 'wallet_overview' %}active{% endif %}" href="{% url 'wallet_overview' %}">INR Wallet</a></li>
                                         <li><a class="dropdown-item {% if current_name == 'manage_portfolio' %}active{% endif %}" href="{% url 'manage_portfolio' %}">Portfolio</a></li>
                                         <li><a class="dropdown-item {% if current_name == 'integrations_settings' %}active{% endif %}" href="{% url 'integrations_settings' %}">Integrations</a></li>
                                         <li><a class="dropdown-item {% if current_name == 'trust_score_breakdown_self' %}active{% endif %}" href="{% url 'trust_score_breakdown_self' %}">Trust Score</a></li>
-                                        <li><hr class="dropdown-divider"></li>
-                                        <li><a class="dropdown-item {% if current_name == 'profile' %}active{% endif %}" href="{% url 'profile' %}">My Profile</a></li>
                                         <li><a class="dropdown-item {% if current_name == 'skill_browse' %}active{% endif %}" href="{% url 'skill_browse' %}">Browse Skills</a></li>
                                         <li><a class="dropdown-item {% if current_name == 'tag_browse' %}active{% endif %}" href="{% url 'tag_browse' %}">Browse Tags</a></li>
-                                        <li>
-                                            <a class="dropdown-item d-flex justify-content-between align-items-center {% if current_name == 'chat_inbox' or current_name == 'chat_thread_detail' %}active{% endif %}" href="{% url 'chat_inbox' %}">
-                                                Chats
-                                                {% if unread_chat_threads_count %}
-                                                    <span id="chatBadge" class="badge rounded-pill text-bg-info ms-2" data-count="{{ unread_chat_threads_count|default:0 }}">
-                                                        {% if unread_chat_threads_count > 99 %}99+{% else %}{{ unread_chat_threads_count|default:0 }}{% endif %}
-                                                    </span>
-                                                {% else %}
-                                                    <span id="chatBadge" class="badge rounded-pill text-bg-info d-none" data-count="0">0</span>
-                                                {% endif %}
-                                            </a>
-                                        </li>
-                                        <li>
-                                            <a class="dropdown-item d-flex justify-content-between align-items-center {% if current_name == 'notification_list' %}active{% endif %}" href="{% url 'notification_list' %}">
-                                                Notifications
-                                                {% if unread_notifications_count %}
-                                                    <span id="notificationBadge" class="badge rounded-pill text-bg-danger ms-2" data-count="{{ unread_notifications_count|default:0 }}">
-                                                        {% if unread_notifications_count > 99 %}99+{% else %}{{ unread_notifications_count|default:0 }}{% endif %}
-                                                    </span>
-                                                {% else %}
-                                                    <span id="notificationBadge" class="badge rounded-pill text-bg-danger d-none" data-count="0">0</span>
-                                                {% endif %}
-                                            </a>
-                                        </li>
                                         {% if user.is_staff %}
                                             <li><hr class="dropdown-divider"></li>
                                             <li class="dropdown-header menu-section-title">Admin</li>

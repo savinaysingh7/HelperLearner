@@ -1,9 +1,9 @@
 """Development settings."""
-from .base import *
 from decouple import config
 import dj_database_url
+from .base import *
 
-DEBUG = config('DEBUG', default=True, cast=bool)
+DEBUG = env_bool('DEBUG', default=True)
 
 # For development, allow all hosts by default
 ALLOWED_HOSTS = config('ALLOWED_HOSTS', default='localhost,127.0.0.1', cast=lambda v: [s.strip() for s in v.split(',')])

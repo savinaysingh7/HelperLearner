@@ -67,7 +67,7 @@ body[data-bs-theme="dark"] {
 }
 
 .app-shell {
-    max-width: 1220px;
+    max-width: 1160px;
 }
 
 h1,
@@ -110,15 +110,15 @@ a:focus {
 }
 
 .app-header {
-    background: rgba(8, 13, 22, 0.9);
+    background: rgba(8, 13, 22, 0.94);
     border-bottom: 1px solid var(--hl-border-soft);
-    backdrop-filter: blur(10px);
-    box-shadow: 0 8px 20px rgba(2, 7, 16, 0.3);
+    backdrop-filter: blur(12px);
+    box-shadow: 0 6px 16px rgba(2, 7, 16, 0.24);
 }
 
 .app-header .navbar {
-    padding-top: 0.58rem;
-    padding-bottom: 0.58rem;
+    padding-top: 0.5rem;
+    padding-bottom: 0.5rem;
 }
 
 .navbar-brand {
@@ -159,9 +159,10 @@ a:focus {
 .navbar .nav-link {
     color: var(--hl-muted);
     font-weight: 600;
-    border-radius: 999px;
-    padding: 0.36rem 0.74rem;
-    transition: background 0.18s ease, color 0.18s ease;
+    border-radius: 0.62rem;
+    padding: 0.34rem 0.66rem;
+    border: 1px solid transparent;
+    transition: background 0.18s ease, color 0.18s ease, border-color 0.18s ease;
 }
 
 .navbar .nav-link:hover,
@@ -172,8 +173,8 @@ a:focus {
 
 .navbar .nav-link.active {
     color: #ffffff;
-    background: rgba(104, 213, 194, 0.18);
-    border: 1px solid rgba(104, 213, 194, 0.34);
+    background: rgba(104, 213, 194, 0.15);
+    border-color: rgba(104, 213, 194, 0.3);
 }
 
 .dropdown-menu {
@@ -211,8 +212,8 @@ a:focus {
 }
 
 .nav-search {
-    width: min(100%, 280px);
-    min-width: 220px;
+    width: min(100%, 240px);
+    min-width: 180px;
 }
 
 .nav-search .input-group-text,
@@ -243,6 +244,7 @@ a:focus {
 .nav-quick-actions {
     margin-left: auto;
     align-items: center;
+    gap: 0.42rem !important;
 }
 
 .nav-collapse-shell {
@@ -251,13 +253,14 @@ a:focus {
 
 .nav-primary {
     align-items: center;
-    gap: 0.14rem;
+    gap: 0.08rem;
 }
 
 .nav-create-btn {
     font-weight: 700;
     border-color: rgba(70, 189, 169, 0.9);
     box-shadow: none;
+    padding-inline: 0.68rem;
 }
 
 .nav-create-btn.active,
@@ -267,13 +270,13 @@ a:focus {
 }
 
 .nav-icon-btn {
-    width: 2.1rem;
-    height: 2.1rem;
+    width: 2rem;
+    height: 2rem;
     padding: 0;
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    border-radius: 0.7rem;
+    border-radius: 0.62rem;
 }
 
 .nav-icon-btn.active {
@@ -283,11 +286,11 @@ a:focus {
 
 .nav-badge {
     position: absolute;
-    top: -0.42rem;
-    right: -0.46rem;
+    top: -0.36rem;
+    right: -0.36rem;
     font-size: 0.65rem;
     line-height: 1;
-    padding: 0.28rem 0.35rem;
+    padding: 0.24rem 0.33rem;
 }
 
 .nav-kp-pill,
@@ -296,38 +299,38 @@ a:focus {
     border: 1px solid rgba(104, 213, 194, 0.36);
     border-radius: 999px;
     color: #b8fff3;
-    padding: 0.33rem 0.72rem;
-    font-size: 0.8rem;
+    padding: 0.28rem 0.62rem;
+    font-size: 0.76rem;
     font-weight: 800;
     white-space: nowrap;
 }
 
 .nav-user-btn {
     font-weight: 700;
-    max-width: 176px;
+    max-width: 146px;
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
 }
 
 .nav-tools-menu {
-    min-width: 17rem;
+    min-width: 15.4rem;
 }
 
 .menu-section-title {
     font-size: 0.68rem;
-    color: #8ea5c4;
+    color: #90a8ca;
     font-weight: 800;
     letter-spacing: 0.08em;
     text-transform: uppercase;
-    padding-top: 0.5rem;
-    padding-bottom: 0.35rem;
+    padding-top: 0.44rem;
+    padding-bottom: 0.3rem;
 }
 
 .nav-user-summary {
     border: 1px solid rgba(156, 176, 203, 0.2);
     border-radius: 0.74rem;
-    margin: 0.15rem;
+    margin: 0.12rem;
     background: rgba(9, 16, 29, 0.75);
 }
 
@@ -364,7 +367,7 @@ a:focus {
 }
 
 .app-main {
-    padding-top: 1.3rem !important;
+    padding-top: 1.15rem !important;
     padding-bottom: 1.8rem !important;
     animation: appFadeIn 0.32s ease both;
 }
@@ -383,6 +386,10 @@ a:focus {
 
 .page-head {
     margin-bottom: 1.2rem;
+}
+
+.page-head-actions .btn {
+    border-radius: 0.62rem;
 }
 
 .page-head .eyebrow {
@@ -663,6 +670,14 @@ a:focus {
     width: 6px;
 }
 
+.request-detail-layout .page-head {
+    margin-bottom: 0.9rem;
+}
+
+.request-action-strip {
+    border-radius: 0.9rem;
+}
+
 .feed-item {
     border-left: 4px solid #53d1bb !important;
     background: rgba(12, 20, 35, 0.96);
@@ -849,7 +864,7 @@ a:focus {
 
 .request-list-item .card-body,
 .job-list-item .card-body {
-    padding: 1rem 1.05rem;
+    padding: 0.95rem 1rem;
 }
 
 .request-list-item p.text-muted.small.mb-0,
@@ -1430,7 +1445,7 @@ footer .text-muted {
 
 @media (max-width: 1199.98px) {
     .nav-search {
-        min-width: 200px;
+        min-width: 160px;
     }
 
     .dashboard-hero-grid {
@@ -1458,6 +1473,10 @@ footer .text-muted {
         justify-content: flex-start;
         flex-wrap: wrap;
         gap: 0.45rem;
+    }
+
+    .nav-kp-pill {
+        order: 1;
     }
 
     .navbar .nav-link {

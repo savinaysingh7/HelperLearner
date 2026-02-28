@@ -9,8 +9,29 @@ from decouple import config
 BASE_DIR = Path(__file__).resolve().parent.parent.parent
 logger = logging.getLogger(__name__)
 
+
+def env_bool(name, default=False):
+    """Parse boolean env values safely without crashing on invalid input."""
+    raw_value = config(name, default=default)
+    if isinstance(raw_value, bool):
+        return raw_value
+
+    normalized = str(raw_value).strip().lower()
+    truthy = {'1', 'true', 'yes', 'on'}
+    falsy = {'0', 'false', 'no', 'off', ''}
+    false_aliases = {'release', 'prod', 'production'}
+
+    if normalized in truthy:
+        return True
+    if normalized in falsy or normalized in false_aliases:
+        return False
+
+    logger.warning("Invalid boolean value for %s=%r. Falling back to default=%s.", name, raw_value, default)
+    return default
+
+
 SECRET_KEY = config("SECRET_KEY", default="unsafe-secret-for-dev")
-DEBUG = config("DEBUG", default=False, cast=bool)
+DEBUG = env_bool("DEBUG", default=False)
 ALLOWED_HOSTS = config(
     "ALLOWED_HOSTS",
     default="*",

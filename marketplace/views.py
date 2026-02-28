@@ -13,7 +13,7 @@ from django.contrib.auth.decorators import login_required
 from django.core.cache import cache
 from django.core.paginator import Paginator
 from django.db import transaction
-from django.db.models import Count, F, Max, OuterRef, Q, Subquery, Value
+from django.db.models import Count, Max, OuterRef, Q, Subquery, Value
 from django.db.models.functions import Coalesce
 from django.http import HttpResponse, JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
@@ -80,7 +80,14 @@ from .serializers import (
     WorkspaceIssueSerializer,
     WorkspaceProjectSerializer,
 )
-from .services import evaluate_job_collusion, record_wallet_entry
+from .services import (
+    RequestLifecycleError,
+    cancel_help_request,
+    claim_help_request,
+    evaluate_job_collusion,
+    record_wallet_entry,
+    resolve_help_request,
+)
 from .webhooks import dispatch_webhook_event
 
 logger = logging.getLogger(__name__)
@@ -1160,32 +1167,16 @@ def withdraw_request_proposal(request, pk):
 @require_POST
 def claim_request(request, pk):
     """Claim an open request for the current user (POST-only endpoint)."""
-    with transaction.atomic():
-        help_req = get_object_or_404(
-            HelpRequest.objects.select_for_update().select_related('user'),
-            pk=pk,
-        )
-
-        if help_req.user_id == request.user.pk:
-            messages.warning(request, 'You cannot claim your own request.')
-            return redirect('request_detail', pk=pk)
-
-        if help_req.status != 'open':
-            messages.error(request, 'This request is no longer open for claiming.')
-            return redirect('request_detail', pk=pk)
-
-        help_req.status = 'in_progress'
-        help_req.accepted_by = request.user
-        help_req.save(update_fields=['status', 'accepted_by', 'updated_at'])
-        dispatch_webhook_event(
-            help_req.user,
-            'request.status_changed',
-            {
-                'request_id': help_req.pk,
-                'status': help_req.status,
-                'accepted_by': request.user.username,
-            },
-        )
+    try:
+        help_req = claim_help_request(pk, request.user)
+    except HelpRequest.DoesNotExist:
+        return redirect('request_list')
+    except RequestLifecycleError as exc:
+        if exc.code == 'self_claim':
+            messages.warning(request, str(exc))
+        else:
+            messages.error(request, str(exc))
+        return redirect('request_detail', pk=pk)
 
     messages.success(request, f'You have accepted the request: {help_req.title}')
     return redirect('request_detail', pk=pk)
@@ -1212,41 +1203,18 @@ def resolve_request(request, pk):
     if request.method == 'GET':
         return render(request, 'marketplace/confirm_resolve.html', {'req': help_req})
 
-    with transaction.atomic():
-        help_req = get_object_or_404(
-            HelpRequest.objects.select_for_update().select_related('user', 'accepted_by'),
-            pk=pk,
-        )
+    try:
+        help_req, helper = resolve_help_request(pk, request.user)
+    except HelpRequest.DoesNotExist:
+        return redirect('request_list')
+    except RequestLifecycleError as exc:
+        if exc.code == 'already_resolved':
+            messages.info(request, str(exc))
+        else:
+            messages.error(request, str(exc))
+        return redirect('request_detail', pk=pk)
 
-        if help_req.user_id != request.user.pk:
-            messages.error(request, 'Only the poster can resolve this request.')
-            return redirect('request_detail', pk=pk)
-
-        if help_req.status == 'resolved':
-            messages.info(request, 'This request has already been resolved.')
-            return redirect('request_detail', pk=pk)
-
-        if not (help_req.status == 'in_progress' and help_req.accepted_by_id):
-            messages.error(request, "Request must be 'In Progress' with a helper to be resolved.")
-            return redirect('request_detail', pk=pk)
-
-        helper = CustomUser.objects.select_for_update().get(pk=help_req.accepted_by_id)
-        CustomUser.objects.filter(pk=helper.pk).update(knowledge_points=F('knowledge_points') + help_req.kp_bounty)
-
-        help_req.status = 'resolved'
-        help_req.save(update_fields=['status', 'updated_at'])
-        dispatch_webhook_event(
-            help_req.user,
-            'request.status_changed',
-            {
-                'request_id': help_req.pk,
-                'status': help_req.status,
-                'accepted_by': helper.username,
-                'kp_bounty': help_req.kp_bounty,
-            },
-        )
-
-        messages.success(request, f'Task resolved. {help_req.kp_bounty} KP transferred to {helper.username}.')
+    messages.success(request, f'Task resolved. {help_req.kp_bounty} KP transferred to {helper.username}.')
 
     return redirect('request_detail', pk=pk)
 
@@ -1268,38 +1236,18 @@ def cancel_request(request, pk):
     if request.method == 'GET':
         return render(request, 'marketplace/confirm_cancel.html', {'req': help_req})
 
-    with transaction.atomic():
-        help_req = get_object_or_404(
-            HelpRequest.objects.select_for_update().select_related('user'),
-            pk=pk,
-        )
+    try:
+        help_req = cancel_help_request(pk, request.user)
+    except HelpRequest.DoesNotExist:
+        return redirect('request_list')
+    except RequestLifecycleError as exc:
+        messages.error(request, str(exc))
+        return redirect('request_detail', pk=pk)
 
-        if help_req.user_id != request.user.pk:
-            messages.error(request, 'Only the poster can cancel this request.')
-            return redirect('request_detail', pk=pk)
-
-        if help_req.status not in ['open', 'in_progress']:
-            messages.error(request, "Only 'Open' or 'In Progress' requests can be canceled.")
-            return redirect('request_detail', pk=pk)
-
-        poster = CustomUser.objects.select_for_update().get(pk=help_req.user_id)
-        CustomUser.objects.filter(pk=poster.pk).update(knowledge_points=F('knowledge_points') + help_req.kp_bounty)
-        help_req.status = 'canceled'
-        help_req.save(update_fields=['status', 'updated_at'])
-        dispatch_webhook_event(
-            help_req.user,
-            'request.status_changed',
-            {
-                'request_id': help_req.pk,
-                'status': help_req.status,
-                'kp_refund': help_req.kp_bounty,
-            },
-        )
-
-        messages.success(
-            request,
-            f"Request '{help_req.title}' has been canceled. {help_req.kp_bounty} KP refunded.",
-        )
+    messages.success(
+        request,
+        f"Request '{help_req.title}' has been canceled. {help_req.kp_bounty} KP refunded.",
+    )
 
     return redirect('request_detail', pk=pk)
 

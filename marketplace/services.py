@@ -2,11 +2,135 @@ from datetime import timedelta
 from decimal import Decimal
 
 from django.db import transaction
+from django.db.models import F
 from django.utils import timezone
 
 from accounts.utils import log_event
-from .models import FreelanceJob, FraudAlert, JobDispute, PayoutRequest, TrustSignal, WalletLedger
+from .models import FreelanceJob, FraudAlert, HelpRequest, JobDispute, PayoutRequest, TrustSignal, WalletLedger
 from .webhooks import dispatch_webhook_event
+
+
+class RequestLifecycleError(ValueError):
+    """Raised when a help-request lifecycle transition is not permitted."""
+
+    def __init__(self, message, code='invalid_transition'):
+        super().__init__(message)
+        self.code = code
+
+
+def claim_help_request(request_id, actor):
+    """Claim an open help request for the given actor with row-level locking."""
+    with transaction.atomic():
+        help_req = (
+            HelpRequest.objects.select_for_update()
+            .select_related('user')
+            .filter(pk=request_id)
+            .first()
+        )
+        if help_req is None:
+            raise HelpRequest.DoesNotExist
+
+        if help_req.user_id == actor.pk:
+            raise RequestLifecycleError('You cannot claim your own request.', code='self_claim')
+        if help_req.status != 'open':
+            raise RequestLifecycleError(
+                'This request is no longer open for claiming.',
+                code='not_open',
+            )
+
+        help_req.status = 'in_progress'
+        help_req.accepted_by = actor
+        help_req.save(update_fields=['status', 'accepted_by', 'updated_at'])
+
+        dispatch_webhook_event(
+            help_req.user,
+            'request.status_changed',
+            {
+                'request_id': help_req.pk,
+                'status': help_req.status,
+                'accepted_by': actor.username,
+            },
+        )
+    return help_req
+
+
+def resolve_help_request(request_id, actor):
+    """Resolve an in-progress help request and transfer escrowed KP to helper."""
+    with transaction.atomic():
+        help_req = (
+            HelpRequest.objects.select_for_update()
+            .select_related('user', 'accepted_by')
+            .filter(pk=request_id)
+            .first()
+        )
+        if help_req is None:
+            raise HelpRequest.DoesNotExist
+
+        if help_req.user_id != actor.pk:
+            raise RequestLifecycleError('Only the poster can resolve this request.', code='forbidden')
+        if help_req.status == 'resolved':
+            raise RequestLifecycleError('This request has already been resolved.', code='already_resolved')
+        if not (help_req.status == 'in_progress' and help_req.accepted_by_id):
+            raise RequestLifecycleError(
+                "Request must be 'In Progress' with a helper to be resolved.",
+                code='invalid_status',
+            )
+
+        helper = help_req.accepted_by.__class__.objects.select_for_update().get(pk=help_req.accepted_by_id)
+        helper.__class__.objects.filter(pk=helper.pk).update(knowledge_points=F('knowledge_points') + help_req.kp_bounty)
+
+        help_req.status = 'resolved'
+        help_req.save(update_fields=['status', 'updated_at'])
+
+        dispatch_webhook_event(
+            help_req.user,
+            'request.status_changed',
+            {
+                'request_id': help_req.pk,
+                'status': help_req.status,
+                'accepted_by': helper.username,
+                'kp_bounty': help_req.kp_bounty,
+            },
+        )
+    return help_req, helper
+
+
+def cancel_help_request(request_id, actor):
+    """Cancel an open/in-progress help request and refund escrowed KP to the poster."""
+    with transaction.atomic():
+        help_req = (
+            HelpRequest.objects.select_for_update()
+            .select_related('user')
+            .filter(pk=request_id)
+            .first()
+        )
+        if help_req is None:
+            raise HelpRequest.DoesNotExist
+
+        if help_req.user_id != actor.pk:
+            raise RequestLifecycleError('Only the poster can cancel this request.', code='forbidden')
+        if help_req.status not in {'open', 'in_progress'}:
+            raise RequestLifecycleError(
+                "Only 'Open' or 'In Progress' requests can be canceled.",
+                code='invalid_status',
+            )
+
+        poster = help_req.user.__class__.objects.select_for_update().get(pk=help_req.user_id)
+        poster.__class__.objects.filter(pk=poster.pk).update(knowledge_points=F('knowledge_points') + help_req.kp_bounty)
+
+        help_req.status = 'canceled'
+        help_req.save(update_fields=['status', 'updated_at'])
+
+        dispatch_webhook_event(
+            help_req.user,
+            'request.status_changed',
+            {
+                'request_id': help_req.pk,
+                'status': help_req.status,
+                'kp_refund': help_req.kp_bounty,
+            },
+        )
+    return help_req
 
 
 def record_wallet_entry(user, direction, amount_inr, source_type, reference_id=None, description=''):

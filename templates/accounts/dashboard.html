@@ -43,7 +43,7 @@
                 <div class="d-flex flex-wrap gap-2">
                     <a href="{% url 'claim_daily_kp' %}" class="btn btn-primary btn-sm">Claim Daily Bonus</a>
                     <a href="{% url 'transfer_kp' %}" class="btn btn-outline-primary btn-sm">Transfer KP</a>
-                    <a href="{% url 'create_request' %}" class="btn btn-outline-secondary btn-sm">Post Request</a>
+                    <a href="#dashboard-action-center" class="btn btn-outline-secondary btn-sm">Open Action Center</a>
                 </div>
             </div>
         </div>
@@ -124,7 +124,7 @@
 
 <div class="row g-3 mb-4">
     <div class="col-12 col-xl-8">
-        <div class="surface-card h-100 quick-action-tile">
+        <div id="dashboard-action-center" class="surface-card h-100 quick-action-tile">
             <div class="card-body">
                 <div class="d-flex justify-content-between align-items-start gap-3 mb-3">
                     <div>

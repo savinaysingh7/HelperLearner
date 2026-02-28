@@ -16,6 +16,13 @@
         {% endif %}
     </h1>
     <p class="text-muted mb-0">Filter by keyword, skill, and tag to find the right request quickly.</p>
+    {% if user.is_authenticated %}
+        <div class="d-flex flex-wrap gap-2 mt-3 page-head-actions">
+            <a href="{% url 'create_request' %}" class="btn btn-primary btn-sm"><i class="bi bi-plus-circle me-1"></i>Post Request</a>
+            <a href="{% url 'post_freelance_job' %}" class="btn btn-outline-secondary btn-sm"><i class="bi bi-briefcase me-1"></i>Post Paid Job</a>
+            <a href="{% url 'saved_searches' %}" class="btn btn-outline-secondary btn-sm"><i class="bi bi-bookmark me-1"></i>Saved Searches</a>
+        </div>
+    {% endif %}
 </section>
 
 <div class="row g-4">
@@ -88,36 +95,44 @@
                 <div class="col-12">
                     <article class="card request-card request-list-item">
                         <div class="card-body">
-                            <div class="d-flex flex-column flex-md-row gap-3 justify-content-between align-items-md-center">
-                                <div>
-                                    <h2 class="h5 mb-1">{{ req.title }}</h2>
-                                    <p class="small text-muted mb-1"><i class="bi bi-person-circle me-1"></i>{{ req.user.username }} &middot; {{ req.created_at|timesince }} ago</p>
-                                    <div class="d-flex flex-wrap gap-2 mb-2 align-items-center">
-                                        <span class="badge badge-soft">{{ req.skill_needed|default:'General' }}</span>
-                                        <span class="badge {% if req.status == 'open' %}text-bg-success{% elif req.status == 'in_progress' %}text-bg-warning{% else %}text-bg-secondary{% endif %}">{{ req.get_status_display }}</span>
-                                        <span class="badge {{ req.expires_at|expiry_badge_class }}">{{ req.expires_at|expires_in_days }}</span>
-                                        {% if req.status == 'open' %}
-                                            <span class="badge badge-soft"><i class="bi bi-people me-1"></i>{{ req.proposal_count }} proposal{{ req.proposal_count|pluralize }}</span>
-                                        {% endif %}
+                            <div class="d-flex flex-column gap-3">
+                                <div class="d-flex flex-column flex-md-row gap-2 justify-content-between align-items-md-start">
+                                    <div>
+                                        <h2 class="h5 mb-1">{{ req.title }}</h2>
+                                        <p class="small text-muted mb-0"><i class="bi bi-person-circle me-1"></i>{{ req.user.username }} &middot; {{ req.created_at|timesince }} ago</p>
                                     </div>
+                                    <div class="text-md-end">
+                                        <div class="h5 text-success mb-0">{{ req.kp_bounty }} KP</div>
+                                    </div>
+                                </div>
+                                <div class="d-flex flex-wrap gap-2 align-items-center">
+                                    <span class="badge badge-soft">{{ req.skill_needed|default:'General' }}</span>
+                                    <span class="badge {% if req.status == 'open' %}text-bg-success{% elif req.status == 'in_progress' %}text-bg-warning{% else %}text-bg-secondary{% endif %}">{{ req.get_status_display }}</span>
+                                    <span class="badge {{ req.expires_at|expiry_badge_class }}">{{ req.expires_at|expires_in_days }}</span>
+                                    {% if req.status == 'open' %}
+                                        <span class="badge badge-soft"><i class="bi bi-people me-1"></i>{{ req.proposal_count }} proposal{{ req.proposal_count|pluralize }}</span>
+                                    {% endif %}
+                                </div>
+                                <div>
                                     {% if req.skill_needed %}
                                         <p class="small text-muted mb-2">
                                             <i class="bi bi-people me-1"></i>{{ req.skill_user_count }} registered user{{ req.skill_user_count|pluralize }} with this skill
                                         </p>
                                     {% endif %}
+                                </div>
+                                <p class="text-muted small mb-0">{{ req.description|truncatewords:20 }}</p>
+                                <div class="d-flex flex-column flex-md-row justify-content-between gap-2 align-items-md-center">
                                     <div class="d-flex flex-wrap gap-2 mb-2">
                                         {% for tag in req.tags.all %}
                                             <a href="{% url 'request_list' %}?tag={{ tag.slug }}" class="badge rounded-pill badge-soft text-decoration-none">#{{ tag.name }}</a>
                                         {% endfor %}
                                     </div>
-                                    {% if req.ai_summary %}
-                                        <p class="small fw-semibold text-info mb-1"><i class="bi bi-stars me-1"></i>{{ req.ai_summary }}</p>
-                                    {% endif %}
-                                    <p class="text-muted small mb-0">{{ req.description|truncatewords:20 }}</p>
-                                </div>
-                                <div class="text-md-end">
-                                    <div class="h5 text-success mb-2">{{ req.kp_bounty }} KP</div>
-                                    <a href="{% url 'request_detail' req.pk %}" class="btn btn-primary btn-sm">View Details</a>
+                                    <div class="d-flex align-items-center gap-2">
+                                        {% if req.ai_summary %}
+                                            <span class="small fw-semibold text-info"><i class="bi bi-stars me-1"></i>{{ req.ai_summary|truncatewords:9 }}</span>
+                                        {% endif %}
+                                        <a href="{% url 'request_detail' req.pk %}" class="btn btn-primary btn-sm">View Details</a>
+                                    </div>
                                 </div>
                             </div>
                         </div>
