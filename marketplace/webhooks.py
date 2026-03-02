@@ -1,9 +1,11 @@
 import hashlib
 import hmac
+import ipaddress
 import json
 import logging
 import time
 from urllib.error import HTTPError, URLError
+from urllib.parse import urlsplit
 from urllib.request import Request, urlopen
 
 from django.conf import settings
@@ -11,6 +13,35 @@ from django.conf import settings
 from .models import WebhookDelivery, WebhookEndpoint
 
 logger = logging.getLogger(__name__)
+
+
+def _is_safe_webhook_url(url):
+    """Return True when the webhook URL does not target private/reserved networks."""
+    try:
+        parsed = urlsplit(url)
+        hostname = (parsed.hostname or '').lower()
+    except Exception:
+        return False
+
+    # Block obviously unsafe hostnames
+    unsafe_hostnames = {'localhost', '0.0.0.0', '[::1]', '[::]'}
+    if hostname in unsafe_hostnames or hostname.endswith('.local'):
+        return False
+
+    # Block cloud metadata endpoint
+    if hostname == '169.254.169.254':
+        return False
+
+    # Try to parse as IP address and check if private/reserved
+    try:
+        addr = ipaddress.ip_address(hostname)
+        if addr.is_private or addr.is_reserved or addr.is_loopback or addr.is_link_local:
+            return False
+    except ValueError:
+        # It's a hostname, not an IP — allow (DNS resolution happens at delivery time)
+        pass
+
+    return True
 
 
 class RetryableWebhookDeliveryError(Exception):
@@ -100,6 +131,9 @@ def deliver_webhook_to_endpoint(endpoint_id, event_type, payload, attempt=1):
         return {'ok': False, 'skipped': True, 'reason': 'missing_endpoint'}
     if not _endpoint_accepts_event(endpoint, event_type):
         return {'ok': False, 'skipped': True, 'reason': 'not_subscribed'}
+    if not _is_safe_webhook_url(endpoint.url):
+        logger.warning('Webhook delivery blocked (SSRF) endpoint=%s url=%s', endpoint.pk, endpoint.url)
+        return {'ok': False, 'skipped': True, 'reason': 'unsafe_url'}
 
     payload_text = json.dumps(payload, separators=(',', ':'), default=str)
     timeout_seconds = max(1, int(getattr(settings, 'WEBHOOK_DELIVERY_TIMEOUT_SECONDS', 5)))

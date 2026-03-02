@@ -84,14 +84,24 @@ class HelpRequestForm(forms.ModelForm):
                 continue
             seen.add(tag_name)
             unique_tags.append(tag_name)
+            if len(unique_tags) >= 10:
+                break
 
         return unique_tags
 
     def save_tags(self, request_obj):
         """Persist parsed tags for a saved request object."""
         tag_names = self.cleaned_data.get('tags_input', [])
-        tags = [Tag.objects.get_or_create(name=tag_name)[0] for tag_name in tag_names]
-        request_obj.tags.set(tags)
+        if not tag_names:
+            request_obj.tags.clear()
+            return
+        # Fetch existing tags in one query
+        existing = {t.name: t for t in Tag.objects.filter(name__in=tag_names)}
+        # Create missing ones individually so Tag.save() slug logic runs
+        for name in tag_names:
+            if name not in existing:
+                existing[name] = Tag.objects.get_or_create(name=name)[0]
+        request_obj.tags.set([existing[name] for name in tag_names if name in existing])
 
 
 class CommentForm(forms.ModelForm):
@@ -399,6 +409,8 @@ class FreelanceJobForm(forms.ModelForm):
                 continue
             seen.add(name)
             unique.append(name)
+            if len(unique) >= 10:
+                break
         return unique
 
     def clean_auto_release_hours(self):
@@ -410,8 +422,14 @@ class FreelanceJobForm(forms.ModelForm):
     def save_tags(self, job_obj):
         """Persist parsed tags for a saved freelance job."""
         tag_names = self.cleaned_data.get('tags_input', [])
-        tags = [Tag.objects.get_or_create(name=name)[0] for name in tag_names]
-        job_obj.tags.set(tags)
+        if not tag_names:
+            job_obj.tags.clear()
+            return
+        existing = {t.name: t for t in Tag.objects.filter(name__in=tag_names)}
+        for name in tag_names:
+            if name not in existing:
+                existing[name] = Tag.objects.get_or_create(name=name)[0]
+        job_obj.tags.set([existing[name] for name in tag_names if name in existing])
 
 
 class JobMilestoneForm(forms.ModelForm):

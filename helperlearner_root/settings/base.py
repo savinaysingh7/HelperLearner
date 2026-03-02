@@ -5,6 +5,7 @@ import sys
 
 import dj_database_url
 from decouple import config
+from django.core.exceptions import ImproperlyConfigured
 
 BASE_DIR = Path(__file__).resolve().parent.parent.parent
 logger = logging.getLogger(__name__)
@@ -34,11 +35,23 @@ def env_bool(name, default=False):
 
 SECRET_KEY = config("SECRET_KEY", default="unsafe-secret-for-dev")
 DEBUG = env_bool("DEBUG", default=False)
+
+if not DEBUG and SECRET_KEY == "unsafe-secret-for-dev":
+    raise ImproperlyConfigured(
+        "SECRET_KEY must be set to a unique, unpredictable value in production. "
+        "Set the SECRET_KEY environment variable."
+    )
+
 ALLOWED_HOSTS = config(
     "ALLOWED_HOSTS",
-    default="*",
+    default="localhost,127.0.0.1" if DEBUG else "",
     cast=lambda value: [host.strip() for host in value.split(",") if host.strip()],
 )
+
+# Render.com sets RENDER_EXTERNAL_HOSTNAME automatically
+RENDER_EXTERNAL_HOSTNAME = config("RENDER_EXTERNAL_HOSTNAME", default="")
+if RENDER_EXTERNAL_HOSTNAME:
+    ALLOWED_HOSTS.append(RENDER_EXTERNAL_HOSTNAME)
 
 INSTALLED_APPS = [
     "django.contrib.admin",
@@ -226,6 +239,15 @@ WEBHOOK_FAILURE_ALERT_THRESHOLD = config("WEBHOOK_FAILURE_ALERT_THRESHOLD", defa
 CELERY_MONITOR_TIMEOUT_SECONDS = config("CELERY_MONITOR_TIMEOUT_SECONDS", default=1.5, cast=float)
 NOTIFICATION_EMAIL_ASYNC_ENABLED = env_bool("NOTIFICATION_EMAIL_ASYNC_ENABLED", default=True)
 
+# Fraud / risk thresholds
+KP_VELOCITY_WINDOW_HOURS = config("KP_VELOCITY_WINDOW_HOURS", default=1, cast=int)
+KP_VELOCITY_MAX_COUNT = config("KP_VELOCITY_MAX_COUNT", default=5, cast=int)
+KP_VELOCITY_MAX_TOTAL = config("KP_VELOCITY_MAX_TOTAL", default=500, cast=int)
+KP_PAIR_WINDOW_HOURS = config("KP_PAIR_WINDOW_HOURS", default=24, cast=int)
+KP_PAIR_MAX_COUNT = config("KP_PAIR_MAX_COUNT", default=8, cast=int)
+KP_PAIR_MAX_TOTAL = config("KP_PAIR_MAX_TOTAL", default=1200, cast=int)
+KP_LARGE_TRANSFER_THRESHOLD = config("KP_LARGE_TRANSFER_THRESHOLD", default=300, cast=int)
+
 CELERY_BROKER_URL = config("CELERY_BROKER_URL", default=REDIS_URL or "redis://127.0.0.1:6379/0")
 CELERY_RESULT_BACKEND = config("CELERY_RESULT_BACKEND", default=CELERY_BROKER_URL)
 CELERY_TASK_ALWAYS_EAGER = env_bool("CELERY_TASK_ALWAYS_EAGER", default=False)
@@ -256,6 +278,15 @@ SENTRY_PROFILES_SAMPLE_RATE = config("SENTRY_PROFILES_SAMPLE_RATE", default=0.0,
 
 X_FRAME_OPTIONS = "DENY"
 SECURE_CONTENT_TYPE_NOSNIFF = True
+
+if not DEBUG:
+    SECURE_SSL_REDIRECT = env_bool("SECURE_SSL_REDIRECT", default=True)
+    SECURE_HSTS_SECONDS = config("SECURE_HSTS_SECONDS", default=31536000, cast=int)
+    SECURE_HSTS_INCLUDE_SUBDOMAINS = True
+    SECURE_HSTS_PRELOAD = True
+    SESSION_COOKIE_SECURE = True
+    CSRF_COOKIE_SECURE = True
+    SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")
 
 AXES_ENABLED = env_bool("AXES_ENABLED", default=True)
 AXES_FAILURE_LIMIT = config("AXES_FAILURE_LIMIT", default=5, cast=int)

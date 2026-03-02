@@ -164,10 +164,10 @@ class RequestObservabilityTests(TestCase):
         self.assertIn('X-Response-Time-ms', response.headers)
 
     def test_request_id_header_is_echoed_when_provided(self):
-        response = self.client.get(reverse('home'), HTTP_X_REQUEST_ID='hl-test-id-001')
+        response = self.client.get(reverse('home'), HTTP_X_REQUEST_ID='a1b2c3d4-e5f6-7890-abcd-ef1234567890')
 
         self.assertEqual(response.status_code, 200)
-        self.assertEqual(response.headers.get('X-Request-ID'), 'hl-test-id-001')
+        self.assertEqual(response.headers.get('X-Request-ID'), 'a1b2c3d4-e5f6-7890-abcd-ef1234567890')
 
     def test_request_context_filter_injects_expected_fields(self):
         tokens = set_request_context(

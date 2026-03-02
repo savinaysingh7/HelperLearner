@@ -1,5 +1,6 @@
 import json
 import logging
+import re
 import time
 from hashlib import sha256
 from urllib import error, request
@@ -45,12 +46,21 @@ def _cache_key(prefix, *parts):
     return f"ai:{prefix}:{digest}"
 
 
-def _post_json_with_retry(endpoint, payload, timeout_seconds, retries, backoff_seconds, model_name):
+def _sanitize_prompt_input(text, max_length=4000):
+    """Strip control characters and cap user-supplied text for safe prompt injection."""
+    cleaned = re.sub(r'[\x00-\x08\x0b\x0c\x0e-\x1f\x7f]', '', str(text or ''))
+    return cleaned.strip()[:max_length]
+
+
+def _post_json_with_retry(endpoint, payload, timeout_seconds, retries, backoff_seconds, model_name, extra_headers=None):
     """POST JSON payload with bounded retries for transient Gemini throttling."""
+    headers = {"Content-Type": "application/json"}
+    if extra_headers:
+        headers.update(extra_headers)
     req = request.Request(
         endpoint,
         data=json.dumps(payload).encode("utf-8"),
-        headers={"Content-Type": "application/json"},
+        headers=headers,
         method="POST",
     )
 
@@ -138,8 +148,8 @@ def _build_prompt(title, description, available_skills):
         "- suggested_skill: must be exactly one from the allowed skills list or empty string.\n"
         "- reasoning_summary: max 160 chars.\n"
         f"Allowed skills: {skill_text}\n\n"
-        f"Draft title: {title}\n"
-        f"Draft description: {description}\n"
+        f"Draft title: {_sanitize_prompt_input(title, 400)}\n"
+        f"Draft description: {_sanitize_prompt_input(description, 4000)}\n"
     )
 
 
@@ -176,7 +186,7 @@ def generate_request_assistance(title, description, available_skills):
     last_exception = None
     tried_models = _candidate_models()
     for model_name in tried_models:
-        endpoint = f"https://generativelanguage.googleapis.com/v1beta/models/{model_name}:generateContent?key={api_key}"
+        endpoint = f"https://generativelanguage.googleapis.com/v1beta/models/{model_name}:generateContent"
         try:
             response_data = _post_json_with_retry(
                 endpoint=endpoint,
@@ -185,6 +195,7 @@ def generate_request_assistance(title, description, available_skills):
                 retries=retries,
                 backoff_seconds=backoff,
                 model_name=model_name,
+                extra_headers={"x-goog-api-key": api_key},
             )
             break
         except error.HTTPError as exc:
@@ -242,8 +253,8 @@ def generate_request_summary(title, description):
     prompt = (
         "Summarize this developer help request in exactly one concise sentence (max 150 chars).\n"
         "Focus on the technical problem and desired outcome.\n"
-        f"Title: {title}\n"
-        f"Description: {description}\n"
+        f"Title: {_sanitize_prompt_input(title, 400)}\n"
+        f"Description: {_sanitize_prompt_input(description, 4000)}\n"
     )
 
     payload = {
@@ -257,7 +268,7 @@ def generate_request_summary(title, description):
     last_exception = None
 
     for model_name in _candidate_models():
-        endpoint = f"https://generativelanguage.googleapis.com/v1beta/models/{model_name}:generateContent?key={api_key}"
+        endpoint = f"https://generativelanguage.googleapis.com/v1beta/models/{model_name}:generateContent"
         try:
             data = _post_json_with_retry(
                 endpoint=endpoint,
@@ -266,6 +277,7 @@ def generate_request_summary(title, description):
                 retries=retries,
                 backoff_seconds=backoff,
                 model_name=model_name,
+                extra_headers={"x-goog-api-key": api_key},
             )
             summary = data["candidates"][0]["content"]["parts"][0]["text"].strip()[:250]
             cache.set(cache_key, summary, cache_timeout)

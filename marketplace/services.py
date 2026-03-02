@@ -37,6 +37,11 @@ def claim_help_request(request_id, actor):
                 'This request is no longer open for claiming.',
                 code='not_open',
             )
+        if help_req.expires_at and help_req.expires_at <= timezone.now():
+            raise RequestLifecycleError(
+                'This request has expired and can no longer be claimed.',
+                code='expired',
+            )
 
         help_req.status = 'in_progress'
         help_req.accepted_by = actor

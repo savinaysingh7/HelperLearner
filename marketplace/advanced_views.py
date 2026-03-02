@@ -187,9 +187,16 @@ def compare_request_proposals(request, pk):
         .order_by('proposed_kp', 'created_at')
     )
 
+    # Batch-annotate all applicant metrics in one query
+    applicant_ids = [p.applicant_id for p in proposal_qs]
+    annotated_map = {}
+    if applicant_ids:
+        for user_obj in annotate_user_metrics(CustomUser.objects.filter(pk__in=applicant_ids)):
+            annotated_map[user_obj.pk] = user_obj
+
     rows = []
     for proposal in proposal_qs:
-        applicant = annotate_user_metrics(CustomUser.objects.filter(pk=proposal.applicant_id)).first() or proposal.applicant
+        applicant = annotated_map.get(proposal.applicant_id, proposal.applicant)
         rows.append(
             {
                 'proposal': proposal,
@@ -223,9 +230,16 @@ def compare_job_proposals(request, pk):
         .order_by('proposed_total_inr', 'created_at')
     )
 
+    # Batch-annotate all applicant metrics in one query
+    applicant_ids = [p.applicant_id for p in proposal_qs]
+    annotated_map = {}
+    if applicant_ids:
+        for user_obj in annotate_user_metrics(CustomUser.objects.filter(pk__in=applicant_ids)):
+            annotated_map[user_obj.pk] = user_obj
+
     rows = []
     for proposal in proposal_qs:
-        applicant = annotate_user_metrics(CustomUser.objects.filter(pk=proposal.applicant_id)).first() or proposal.applicant
+        applicant = annotated_map.get(proposal.applicant_id, proposal.applicant)
         rows.append(
             {
                 'proposal': proposal,
@@ -420,6 +434,21 @@ def upload_attachment(request, target_type, target_id):
 
     model_cls = target_map[target_type]
     target_obj = get_object_or_404(model_cls, pk=target_id)
+
+    # Ownership check: verify user is involved with the target entity
+    if target_type == 'request':
+        if request.user.pk not in {target_obj.user_id, target_obj.accepted_by_id}:
+            messages.error(request, 'You can only attach files to your own requests.')
+            return redirect(request.META.get('HTTP_REFERER', 'home'))
+    elif target_type == 'job':
+        if request.user.pk not in {target_obj.client_id, target_obj.freelancer_id}:
+            messages.error(request, 'You can only attach files to jobs you are involved in.')
+            return redirect(request.META.get('HTTP_REFERER', 'home'))
+    elif target_type == 'comment':
+        if request.user.pk != target_obj.user_id:
+            messages.error(request, 'You can only attach files to your own comments.')
+            return redirect(request.META.get('HTTP_REFERER', 'home'))
+
     form = AttachmentUploadForm(request.POST, request.FILES)
     if not form.is_valid():
         messages.error(request, 'Please upload a valid file.')

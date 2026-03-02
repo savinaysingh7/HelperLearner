@@ -84,6 +84,16 @@ class CustomUser(AbstractUser):
             models.Index(fields=['ui_density']),
             models.Index(fields=['trust_score']),
         ]
+        constraints = [
+            models.CheckConstraint(
+                condition=models.Q(knowledge_points__gte=0),
+                name='customuser_kp_non_negative',
+            ),
+            models.CheckConstraint(
+                condition=models.Q(wallet_inr__gte=0),
+                name='customuser_wallet_non_negative',
+            ),
+        ]
 
 
 class AuditLog(models.Model):

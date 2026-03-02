@@ -82,10 +82,13 @@ class FreelanceJobSerializer(serializers.ModelSerializer):
     """Serializer for paid freelance jobs with milestone visibility."""
 
     client = serializers.CharField(source='client.username', read_only=True)
-    freelancer = serializers.CharField(source='freelancer.username', read_only=True)
+    freelancer = serializers.SerializerMethodField()
     skill_needed = serializers.CharField(source='skill_needed.name', read_only=True)
     tags = serializers.SlugRelatedField(many=True, read_only=True, slug_field='name')
     milestones = JobMilestoneSerializer(many=True, read_only=True)
+
+    def get_freelancer(self, obj):
+        return obj.freelancer.username if obj.freelancer_id else None
 
     class Meta:
         model = FreelanceJob

@@ -38,18 +38,33 @@ def assign_active_experiments(request):
     session_key = request.session.session_key or ''
     identity = f'user:{request.user.pk}' if request.user.is_authenticated else f'session:{session_key}'
 
-    assignments = {}
     experiments = [exp for exp in Experiment.objects.prefetch_related('variants').filter(is_active=True) if exp.is_live()]
+    if not experiments:
+        request.experiments = {}
+        return {}
+
+    experiment_ids = [exp.pk for exp in experiments]
+
+    # Batch-fetch existing assignments to avoid N+1
+    existing_assignments = {}
+    if request.user.is_authenticated:
+        for assignment in ExperimentAssignment.objects.filter(
+            experiment_id__in=experiment_ids, user=request.user
+        ).select_related('variant', 'experiment'):
+            existing_assignments[assignment.experiment_id] = assignment
+
+    session_assignments = {}
+    if session_key:
+        for assignment in ExperimentAssignment.objects.filter(
+            experiment_id__in=experiment_ids, user__isnull=True, session_key=session_key
+        ).select_related('variant', 'experiment'):
+            session_assignments.setdefault(assignment.experiment_id, assignment)
+
+    assignments = {}
     for experiment in experiments:
-        assignment = None
-        if request.user.is_authenticated:
-            assignment = ExperimentAssignment.objects.filter(experiment=experiment, user=request.user).select_related('variant').first()
+        assignment = existing_assignments.get(experiment.pk)
         if assignment is None:
-            assignment = ExperimentAssignment.objects.filter(
-                experiment=experiment,
-                user__isnull=True,
-                session_key=session_key,
-            ).select_related('variant').first()
+            assignment = session_assignments.get(experiment.pk)
 
         if assignment is None:
             traffic_bucket = _stable_percent(f'{experiment.slug}:{identity}')

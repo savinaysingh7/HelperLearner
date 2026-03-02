@@ -51,7 +51,16 @@ class RequestMetricsMiddleware:
         self.get_response = get_response
 
     def __call__(self, request):
-        request_id = request.headers.get('X-Request-ID') or str(uuid.uuid4())
+        raw_request_id = request.headers.get('X-Request-ID', '')
+        # Validate UUID format to prevent log injection
+        try:
+            if raw_request_id:
+                uuid.UUID(raw_request_id)
+                request_id = raw_request_id
+            else:
+                request_id = str(uuid.uuid4())
+        except ValueError:
+            request_id = str(uuid.uuid4())
         request.request_id = request_id
         context_tokens = set_request_context(
             request_id=request_id,

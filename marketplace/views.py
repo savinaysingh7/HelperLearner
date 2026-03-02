@@ -205,17 +205,22 @@ def unified_search(request):
     """Search requests, users, and skills together and render grouped discovery results."""
     query = request.GET.get('q', '').strip()
     request_results, user_results, skill_results = _search_querysets(query)
-    has_results = request_results.exists() or user_results.exists() or skill_results.exists()
+
+    # Fetch sliced results once; derive counts and has_results from materialized lists
+    request_list = list(request_results[:20]) if query else []
+    user_list = list(user_results[:20]) if query else []
+    skill_list = list(skill_results[:20]) if query else []
+    has_results = bool(request_list or user_list or skill_list)
 
     context = {
         'query': query,
-        'request_results': request_results[:20],
-        'user_results': user_results[:20],
-        'skill_results': skill_results[:20],
-        'request_count': request_results.count() if query else 0,
-        'user_count': user_results.count() if query else 0,
-        'skill_count': skill_results.count() if query else 0,
-        'has_results': has_results if query else False,
+        'request_results': request_list,
+        'user_results': user_list,
+        'skill_results': skill_list,
+        'request_count': len(request_list),
+        'user_count': len(user_list),
+        'skill_count': len(skill_list),
+        'has_results': has_results,
     }
     return render(request, 'marketplace/search_results.html', context)
 
