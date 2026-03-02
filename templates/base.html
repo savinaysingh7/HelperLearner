@@ -55,15 +55,6 @@
                                     {% if current_name == 'freelance_job_list' or current_name == 'post_freelance_job' or current_name == 'freelance_job_detail' %}aria-current="page"{% endif %}
                                 >Jobs</a>
                             </li>
-                            {% if user.is_authenticated %}
-                                <li class="nav-item">
-                                    <a
-                                        class="nav-link {% if current_name == 'workspace_list' or current_name == 'workspace_detail' or current_name == 'workspace_projects' or current_name == 'workspace_project_board' or current_name == 'workspace_issue_detail' or current_name == 'workspace_issue_create' or current_name == 'workspace_issue_edit' %}active{% endif %}"
-                                        href="{% url 'workspace_list' %}"
-                                        {% if current_name == 'workspace_list' or current_name == 'workspace_detail' or current_name == 'workspace_projects' or current_name == 'workspace_project_board' or current_name == 'workspace_issue_detail' or current_name == 'workspace_issue_create' or current_name == 'workspace_issue_edit' %}aria-current="page"{% endif %}
-                                    >Workspaces</a>
-                                </li>
-                            {% endif %}
                             <li class="nav-item">
                                 <a
                                     class="nav-link {% if current_name == 'leaderboard' %}active{% endif %}"
@@ -71,6 +62,18 @@
                                     {% if current_name == 'leaderboard' %}aria-current="page"{% endif %}
                                 >Leaderboard</a>
                             </li>
+                            {% if user.is_authenticated %}
+                                <li class="nav-item dropdown nav-core-more">
+                                    <button class="nav-link dropdown-toggle nav-more-toggle {% if current_name == 'workspace_list' or current_name == 'workspace_detail' or current_name == 'workspace_projects' or current_name == 'workspace_project_board' or current_name == 'workspace_issue_detail' or current_name == 'workspace_issue_create' or current_name == 'workspace_issue_edit' or current_name == 'skill_browse' or current_name == 'tag_browse' %}active{% endif %}" data-bs-toggle="dropdown" type="button" aria-expanded="false">
+                                        More
+                                    </button>
+                                    <ul class="dropdown-menu">
+                                        <li><a class="dropdown-item {% if current_name == 'workspace_list' or current_name == 'workspace_detail' or current_name == 'workspace_projects' or current_name == 'workspace_project_board' or current_name == 'workspace_issue_detail' or current_name == 'workspace_issue_create' or current_name == 'workspace_issue_edit' %}active{% endif %}" href="{% url 'workspace_list' %}">Workspaces</a></li>
+                                        <li><a class="dropdown-item {% if current_name == 'skill_browse' %}active{% endif %}" href="{% url 'skill_browse' %}">Browse Skills</a></li>
+                                        <li><a class="dropdown-item {% if current_name == 'tag_browse' %}active{% endif %}" href="{% url 'tag_browse' %}">Browse Tags</a></li>
+                                    </ul>
+                                </li>
+                            {% endif %}
                         </ul>
 
                         <form class="nav-search my-2 my-lg-0 ms-lg-auto" role="search" action="{% url 'search' %}" method="get">
@@ -135,7 +138,7 @@
                                         <span id="notificationBadge" class="badge rounded-pill text-bg-danger nav-badge d-none" data-count="0">0</span>
                                     {% endif %}
                                 </a>
-                                <span class="nav-kp-pill"><i class="bi bi-coin me-1"></i>{{ user.knowledge_points }} KP</span>
+                                <span class="nav-kp-pill"><i class="bi bi-coin me-1"></i><span id="navKpBalance">{{ user.knowledge_points }}</span> KP</span>
                                 <div class="dropdown">
                                     <button class="btn btn-outline-light btn-sm dropdown-toggle nav-user-btn" type="button" data-bs-toggle="dropdown" aria-expanded="false">
                                         <i class="bi bi-person-circle me-1"></i>{{ user.username }}
@@ -145,29 +148,25 @@
                                             <div class="small text-muted mb-1">Signed in as</div>
                                             <div class="fw-semibold mb-2">{{ user.username }}</div>
                                             <div class="d-flex gap-2 flex-wrap">
-                                                <span class="nav-inline-chip"><i class="bi bi-coin me-1"></i>{{ user.knowledge_points }} KP</span>
-                                                <span class="nav-inline-chip"><i class="bi bi-wallet2 me-1"></i>&#8377;{{ user.wallet_inr }}</span>
+                                                <span class="nav-inline-chip"><i class="bi bi-coin me-1"></i><span id="menuKpBalance">{{ user.knowledge_points }}</span> KP</span>
+                                                <span class="nav-inline-chip"><i class="bi bi-wallet2 me-1"></i>&#8377;<span id="menuWalletBalance">{{ user.wallet_inr }}</span></span>
                                             </div>
                                         </li>
                                         <li><hr class="dropdown-divider"></li>
-                                        <li class="dropdown-header menu-section-title">Workspace &amp; Activity</li>
                                         <li><a class="dropdown-item {% if current_name == 'dashboard' %}active{% endif %}" href="{% url 'dashboard' %}">Dashboard</a></li>
+                                        <li><a class="dropdown-item {% if current_name == 'profile' %}active{% endif %}" href="{% url 'profile' %}">My Profile</a></li>
                                         <li><a class="dropdown-item {% if current_name == 'activity_feed' %}active{% endif %}" href="{% url 'activity_feed' %}">Activity Feed</a></li>
                                         <li><a class="dropdown-item {% if current_name == 'saved_searches' %}active{% endif %}" href="{% url 'saved_searches' %}">Saved Searches</a></li>
                                         <li><a class="dropdown-item {% if current_name == 'recommendations' %}active{% endif %}" href="{% url 'recommendations' %}">Recommendations</a></li>
-                                        <li><hr class="dropdown-divider"></li>
-                                        <li class="dropdown-header menu-section-title">Account</li>
-                                        <li><a class="dropdown-item {% if current_name == 'profile' %}active{% endif %}" href="{% url 'profile' %}">My Profile</a></li>
                                         <li><a class="dropdown-item {% if current_name == 'wallet_overview' %}active{% endif %}" href="{% url 'wallet_overview' %}">INR Wallet</a></li>
+                                        <li><a class="dropdown-item {% if current_name == 'workspace_list' or current_name == 'workspace_detail' or current_name == 'workspace_projects' or current_name == 'workspace_project_board' or current_name == 'workspace_issue_detail' or current_name == 'workspace_issue_create' or current_name == 'workspace_issue_edit' %}active{% endif %}" href="{% url 'workspace_list' %}">Workspace Hub</a></li>
                                         <li><a class="dropdown-item {% if current_name == 'manage_portfolio' %}active{% endif %}" href="{% url 'manage_portfolio' %}">Portfolio</a></li>
                                         <li><a class="dropdown-item {% if current_name == 'integrations_settings' %}active{% endif %}" href="{% url 'integrations_settings' %}">Integrations</a></li>
                                         <li><a class="dropdown-item {% if current_name == 'trust_score_breakdown_self' %}active{% endif %}" href="{% url 'trust_score_breakdown_self' %}">Trust Score</a></li>
-                                        <li><a class="dropdown-item {% if current_name == 'skill_browse' %}active{% endif %}" href="{% url 'skill_browse' %}">Browse Skills</a></li>
-                                        <li><a class="dropdown-item {% if current_name == 'tag_browse' %}active{% endif %}" href="{% url 'tag_browse' %}">Browse Tags</a></li>
                                         {% if user.is_staff %}
                                             <li><hr class="dropdown-divider"></li>
-                                            <li class="dropdown-header menu-section-title">Admin</li>
                                             <li><a class="dropdown-item {% if current_name == 'advanced_analytics' %}active{% endif %}" href="{% url 'advanced_analytics' %}">Advanced Analytics</a></li>
+                                            <li><a class="dropdown-item" href="{% url 'ops_runtime_status' %}" target="_blank" rel="noopener">Runtime Diagnostics (JSON)</a></li>
                                             <li><a class="dropdown-item {% if current_name == 'moderation_console' %}active{% endif %}" href="{% url 'moderation_console' %}">Moderation Console</a></li>
                                             <li><a class="dropdown-item {% if current_name == 'experiment_console' %}active{% endif %}" href="{% url 'experiment_console' %}">Experiments</a></li>
                                         {% endif %}
@@ -289,6 +288,69 @@
 
             {% if user.is_authenticated %}
             (function () {
+                function setBadgeCount(element, count) {
+                    if (!element) {
+                        return;
+                    }
+                    var safeCount = Number.isFinite(count) ? Math.max(0, count) : 0;
+                    element.dataset.count = String(safeCount);
+                    element.textContent = safeCount > 99 ? "99+" : String(safeCount);
+                    if (safeCount > 0) {
+                        element.classList.remove("d-none");
+                    } else {
+                        element.classList.add("d-none");
+                    }
+                }
+
+                function setTextValue(id, value) {
+                    var target = document.getElementById(id);
+                    if (target) {
+                        target.textContent = value;
+                    }
+                }
+
+                async function syncLiveStatus() {
+                    try {
+                        var response = await fetch("{% url 'live_nav_status' %}", {
+                            headers: {
+                                "X-Requested-With": "XMLHttpRequest",
+                                "Accept": "application/json"
+                            },
+                            credentials: "same-origin"
+                        });
+                        if (!response.ok) {
+                            return;
+                        }
+                        var data = await response.json();
+                        setBadgeCount(
+                            document.getElementById("notificationBadge"),
+                            parseInt(data.unread_notifications_count || "0", 10)
+                        );
+                        setBadgeCount(
+                            document.getElementById("chatBadge"),
+                            parseInt(data.unread_chat_threads_count || "0", 10)
+                        );
+                        setTextValue("navKpBalance", String(data.knowledge_points || 0));
+                        setTextValue("menuKpBalance", String(data.knowledge_points || 0));
+                        setTextValue("menuWalletBalance", String(data.wallet_inr || "0.00"));
+                    } catch (error) {
+                        return;
+                    }
+                }
+
+                syncLiveStatus();
+                var liveSyncHandle = window.setInterval(syncLiveStatus, 12000);
+                document.addEventListener("visibilitychange", function () {
+                    if (!document.hidden) {
+                        syncLiveStatus();
+                    }
+                });
+                window.addEventListener("beforeunload", function () {
+                    if (liveSyncHandle) {
+                        window.clearInterval(liveSyncHandle);
+                    }
+                });
+
                 var protocol = window.location.protocol === "https:" ? "wss" : "ws";
                 var socketUrl = protocol + "://" + window.location.host + "/ws/updates/";
                 var socket;
@@ -308,28 +370,8 @@
                     window.dispatchEvent(new CustomEvent("hl:ws-event", { detail: payload }));
                     var isNotificationEvent = payload.event === "notification.created" || payload.event === "kp.received";
                     var isChatEvent = payload.event === "chat.message";
-                    if (!isNotificationEvent && !isChatEvent) {
-                        return;
-                    }
-
-                    if (isNotificationEvent) {
-                        var notificationBadge = document.getElementById("notificationBadge");
-                        if (notificationBadge) {
-                            var notificationCount = parseInt(notificationBadge.dataset.count || "0", 10) + 1;
-                            notificationBadge.dataset.count = String(notificationCount);
-                            notificationBadge.textContent = notificationCount > 99 ? "99+" : String(notificationCount);
-                            notificationBadge.classList.remove("d-none");
-                        }
-                    }
-
-                    if (isChatEvent) {
-                        var chatBadge = document.getElementById("chatBadge");
-                        if (chatBadge) {
-                            var chatCount = parseInt(chatBadge.dataset.count || "0", 10) + 1;
-                            chatBadge.dataset.count = String(chatCount);
-                            chatBadge.textContent = chatCount > 99 ? "99+" : String(chatCount);
-                            chatBadge.classList.remove("d-none");
-                        }
+                    if (isNotificationEvent || isChatEvent) {
+                        syncLiveStatus();
                     }
 
                     if ("Notification" in window && Notification.permission === "granted" && payload.payload && payload.payload.message) {

@@ -8,6 +8,8 @@ from decouple import config
 
 BASE_DIR = Path(__file__).resolve().parent.parent.parent
 logger = logging.getLogger(__name__)
+LOG_FILE_PATH = Path(config("LOG_FILE", default=str(BASE_DIR / "logs" / "server.log")))
+LOG_FILE_PATH.parent.mkdir(parents=True, exist_ok=True)
 
 
 def env_bool(name, default=False):
@@ -114,7 +116,7 @@ DATABASES = {
             default="postgresql://postgres:postgres@localhost:5432/helperlearner",
         ),
         conn_max_age=config("DATABASE_CONN_MAX_AGE", default=600, cast=int),
-        ssl_require=config("DATABASE_SSL_REQUIRE", default=False, cast=bool),
+        ssl_require=env_bool("DATABASE_SSL_REQUIRE", default=False),
     )
 }
 
@@ -206,7 +208,7 @@ LOGOUT_REDIRECT_URL = "home"
 DEFAULT_FROM_EMAIL = config("DEFAULT_FROM_EMAIL", default="no-reply@helperlearner.local")
 GEMINI_API_KEY = config("GEMINI_API_KEY", default="")
 GEMINI_MODEL = config("GEMINI_MODEL", default="gemini-flash-latest")
-AI_SUMMARY_ENABLED = config("AI_SUMMARY_ENABLED", default=True, cast=bool)
+AI_SUMMARY_ENABLED = env_bool("AI_SUMMARY_ENABLED", default=True)
 AI_HTTP_RETRY_ATTEMPTS = config("AI_HTTP_RETRY_ATTEMPTS", default=2, cast=int)
 AI_HTTP_RETRY_BASE_DELAY_SECONDS = config("AI_HTTP_RETRY_BASE_DELAY_SECONDS", default=0.4, cast=float)
 AI_ASSIST_TIMEOUT_SECONDS = config("AI_ASSIST_TIMEOUT_SECONDS", default=20, cast=int)
@@ -215,19 +217,19 @@ AI_REQUEST_ASSIST_CACHE_SECONDS = config("AI_REQUEST_ASSIST_CACHE_SECONDS", defa
 AI_SUMMARY_CACHE_SECONDS = config("AI_SUMMARY_CACHE_SECONDS", default=3600, cast=int)
 PUBLIC_STATS_CACHE_SECONDS = config("PUBLIC_STATS_CACHE_SECONDS", default=45, cast=int)
 SLOW_REQUEST_THRESHOLD_MS = config("SLOW_REQUEST_THRESHOLD_MS", default=900, cast=int)
-READINESS_CHECK_CELERY = config("READINESS_CHECK_CELERY", default=False, cast=bool)
+READINESS_CHECK_CELERY = env_bool("READINESS_CHECK_CELERY", default=False)
 READINESS_CHECK_CELERY_TIMEOUT_SECONDS = config("READINESS_CHECK_CELERY_TIMEOUT_SECONDS", default=2, cast=int)
-WEBHOOK_ASYNC_ENABLED = config("WEBHOOK_ASYNC_ENABLED", default=True, cast=bool)
+WEBHOOK_ASYNC_ENABLED = env_bool("WEBHOOK_ASYNC_ENABLED", default=True)
 WEBHOOK_DELIVERY_TIMEOUT_SECONDS = config("WEBHOOK_DELIVERY_TIMEOUT_SECONDS", default=5, cast=int)
 WEBHOOK_MAX_ATTEMPTS = config("WEBHOOK_MAX_ATTEMPTS", default=3, cast=int)
 WEBHOOK_FAILURE_ALERT_THRESHOLD = config("WEBHOOK_FAILURE_ALERT_THRESHOLD", default=20, cast=int)
 CELERY_MONITOR_TIMEOUT_SECONDS = config("CELERY_MONITOR_TIMEOUT_SECONDS", default=1.5, cast=float)
-NOTIFICATION_EMAIL_ASYNC_ENABLED = config("NOTIFICATION_EMAIL_ASYNC_ENABLED", default=True, cast=bool)
+NOTIFICATION_EMAIL_ASYNC_ENABLED = env_bool("NOTIFICATION_EMAIL_ASYNC_ENABLED", default=True)
 
 CELERY_BROKER_URL = config("CELERY_BROKER_URL", default=REDIS_URL or "redis://127.0.0.1:6379/0")
 CELERY_RESULT_BACKEND = config("CELERY_RESULT_BACKEND", default=CELERY_BROKER_URL)
-CELERY_TASK_ALWAYS_EAGER = config("CELERY_TASK_ALWAYS_EAGER", default=False, cast=bool)
-CELERY_TASK_EAGER_PROPAGATES = config("CELERY_TASK_EAGER_PROPAGATES", default=True, cast=bool)
+CELERY_TASK_ALWAYS_EAGER = env_bool("CELERY_TASK_ALWAYS_EAGER", default=False)
+CELERY_TASK_EAGER_PROPAGATES = env_bool("CELERY_TASK_EAGER_PROPAGATES", default=True)
 CELERY_ACCEPT_CONTENT = ["json"]
 CELERY_TASK_SERIALIZER = "json"
 CELERY_RESULT_SERIALIZER = "json"
@@ -255,12 +257,12 @@ SENTRY_PROFILES_SAMPLE_RATE = config("SENTRY_PROFILES_SAMPLE_RATE", default=0.0,
 X_FRAME_OPTIONS = "DENY"
 SECURE_CONTENT_TYPE_NOSNIFF = True
 
-AXES_ENABLED = config("AXES_ENABLED", default=True, cast=bool)
+AXES_ENABLED = env_bool("AXES_ENABLED", default=True)
 AXES_FAILURE_LIMIT = config("AXES_FAILURE_LIMIT", default=5, cast=int)
 AXES_COOLOFF_TIME = config("AXES_COOLOFF_TIME", default=1, cast=int)
 AXES_LOCK_OUT_AT_FAILURE = True
 AXES_RESET_ON_SUCCESS = True
-AXES_VERBOSE = config("AXES_VERBOSE", default=False, cast=bool)
+AXES_VERBOSE = env_bool("AXES_VERBOSE", default=False)
 
 if "test" in sys.argv:
     AXES_ENABLED = False
@@ -302,7 +304,9 @@ LOGGING = {
         },
         "file": {
             "class": "logging.handlers.RotatingFileHandler",
-            "filename": BASE_DIR / "server_log.txt",
+            "filename": LOG_FILE_PATH,
+            "encoding": "utf-8",
+            "errors": "replace",
             "maxBytes": 1024 * 1024,
             "backupCount": 3,
             "formatter": "verbose",

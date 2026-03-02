@@ -1,6 +1,9 @@
 ﻿from decimal import Decimal, InvalidOperation
 
+from pathlib import Path
+
 from django import forms
+from django.conf import settings
 
 from .models import (
     Attachment,
@@ -500,6 +503,25 @@ class DeliverableRevisionForm(forms.ModelForm):
 class AttachmentUploadForm(forms.ModelForm):
     """Generic attachment form for requests, jobs, and comments."""
 
+    ALLOWED_EXTENSIONS = {
+        '.png',
+        '.jpg',
+        '.jpeg',
+        '.gif',
+        '.webp',
+        '.pdf',
+        '.txt',
+        '.md',
+        '.log',
+        '.csv',
+        '.json',
+        '.zip',
+        '.doc',
+        '.docx',
+        '.xlsx',
+        '.pptx',
+    }
+
     class Meta:
         model = Attachment
         fields = ['file', 'caption']
@@ -507,6 +529,23 @@ class AttachmentUploadForm(forms.ModelForm):
             'file': forms.ClearableFileInput(attrs={'class': 'form-control'}),
             'caption': forms.TextInput(attrs={'class': 'form-control', 'placeholder': 'Optional caption'}),
         }
+
+    def clean_file(self):
+        """Validate uploaded attachment extension and file size."""
+        uploaded = self.cleaned_data.get('file')
+        if not uploaded:
+            return uploaded
+
+        extension = Path(uploaded.name or '').suffix.lower()
+        if extension not in self.ALLOWED_EXTENSIONS:
+            allowed = ', '.join(sorted(ext.lstrip('.') for ext in self.ALLOWED_EXTENSIONS))
+            raise forms.ValidationError(f'Unsupported file type. Allowed types: {allowed}.')
+
+        max_mb = int(getattr(settings, 'ATTACHMENT_MAX_UPLOAD_MB', 5))
+        if uploaded.size > max_mb * 1024 * 1024:
+            raise forms.ValidationError(f'File too large. Maximum allowed size is {max_mb} MB.')
+
+        return uploaded
 
 
 class WorkspaceCreateForm(forms.ModelForm):

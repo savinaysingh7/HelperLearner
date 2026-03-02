@@ -2,12 +2,15 @@ from io import StringIO
 from unittest.mock import patch
 
 from django.core.management import call_command
+from django.core.management.base import CommandError
 from django.test import TestCase, override_settings
 from django.urls import reverse
+from django.utils import timezone
 
 from accounts.models import CustomUser
+from notifications.models import Notification
 
-from .models import WebhookDelivery, WebhookEndpoint
+from .models import ChatMessage, ChatThread, ChatThreadParticipant, WebhookDelivery, WebhookEndpoint
 
 
 class OpsEndpointTests(TestCase):
@@ -44,6 +47,32 @@ class OpsEndpointTests(TestCase):
     def test_ops_celery_status_requires_staff(self):
         self.client.login(username="regular_user", password="pw")
         response = self.client.get(reverse("ops_celery_status"))
+        self.assertEqual(response.status_code, 302)
+
+    @patch(
+        "marketplace.advanced_views.collect_runtime_snapshot",
+        return_value={
+            "status": "healthy",
+            "healthy": True,
+            "critical_failures": [],
+            "warnings": [],
+            "checks": {"database": {"ok": True, "critical": True, "detail": "Database connection OK."}},
+            "environment": {"debug": False, "database_engine": "django.db.backends.postgresql", "cache_backend": "locmem", "timezone": "UTC"},
+            "checked_at": "2026-02-28T10:00:00+00:00",
+        },
+    )
+    def test_ops_runtime_status_staff_can_access(self, _mock_snapshot):
+        self.client.login(username="ops_admin", password="pw")
+        response = self.client.get(reverse("ops_runtime_status"))
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        self.assertEqual(payload["status"], "healthy")
+        self.assertEqual(payload["service"], "runtime")
+        self.assertIn("checks", payload)
+
+    def test_ops_runtime_status_requires_staff(self):
+        self.client.login(username="regular_user", password="pw")
+        response = self.client.get(reverse("ops_runtime_status"))
         self.assertEqual(response.status_code, 302)
 
     @override_settings(WEBHOOK_FAILURE_ALERT_THRESHOLD=1)
@@ -112,3 +141,104 @@ class RequeueFailedWebhooksCommandTests(TestCase):
             "request.status_changed",
             {"request_id": 108},
         )
+
+
+class DiagnoseRuntimeCommandTests(TestCase):
+    @patch(
+        "marketplace.management.commands.diagnose_runtime.collect_runtime_snapshot",
+        return_value={
+            "status": "warning",
+            "healthy": True,
+            "critical_failures": [],
+            "warnings": ["ai_assist"],
+            "checks": {
+                "database": {"ok": True, "critical": True, "detail": "Database connection OK."},
+                "ai_assist": {"ok": False, "critical": False, "detail": "GEMINI_API_KEY is not configured."},
+            },
+            "environment": {},
+            "checked_at": "2026-02-28T10:00:00+00:00",
+        },
+    )
+    def test_diagnose_runtime_reports_warnings_without_failing(self, _mock_snapshot):
+        output = StringIO()
+        call_command("diagnose_runtime", stdout=output)
+        rendered = output.getvalue()
+        self.assertIn("Runtime status: warning", rendered)
+        self.assertIn("Non-critical warnings", rendered)
+
+    @patch(
+        "marketplace.management.commands.diagnose_runtime.collect_runtime_snapshot",
+        return_value={
+            "status": "degraded",
+            "healthy": False,
+            "critical_failures": ["database"],
+            "warnings": [],
+            "checks": {
+                "database": {"ok": False, "critical": True, "detail": "Database connection failed."},
+            },
+            "environment": {},
+            "checked_at": "2026-02-28T10:00:00+00:00",
+        },
+    )
+    def test_diagnose_runtime_fails_when_critical_checks_fail(self, _mock_snapshot):
+        output = StringIO()
+        with self.assertRaises(CommandError):
+            call_command("diagnose_runtime", stdout=output)
+
+
+class LiveNavStatusEndpointTests(TestCase):
+    def setUp(self):
+        self.user = CustomUser.objects.create_user(
+            username="nav_user",
+            password="pw",
+            knowledge_points=145,
+            wallet_inr="98.50",
+        )
+        self.other = CustomUser.objects.create_user(username="nav_other", password="pw")
+
+    def test_live_nav_status_requires_login(self):
+        response = self.client.get(reverse("live_nav_status"))
+        self.assertEqual(response.status_code, 302)
+
+    def test_live_nav_status_returns_current_counts(self):
+        Notification.objects.create(user=self.user, message="Unread", link="/")
+        thread = ChatThread.objects.create(
+            thread_type="request",
+            title="Live nav thread",
+            created_by=self.user,
+        )
+        ChatThreadParticipant.objects.create(thread=thread, user=self.user)
+        ChatThreadParticipant.objects.create(thread=thread, user=self.other)
+        ChatMessage.objects.create(thread=thread, sender=self.other, content="Fresh update")
+
+        self.client.login(username="nav_user", password="pw")
+        response = self.client.get(reverse("live_nav_status"))
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        self.assertEqual(payload["unread_notifications_count"], 1)
+        self.assertEqual(payload["unread_chat_threads_count"], 1)
+        self.assertEqual(payload["knowledge_points"], 145)
+        self.assertEqual(payload["wallet_inr"], "98.50")
+
+    def test_live_nav_status_reflects_read_updates(self):
+        notification = Notification.objects.create(user=self.user, message="Unread", link="/")
+        thread = ChatThread.objects.create(
+            thread_type="request",
+            title="Read thread",
+            created_by=self.user,
+        )
+        participation = ChatThreadParticipant.objects.create(thread=thread, user=self.user)
+        ChatThreadParticipant.objects.create(thread=thread, user=self.other)
+        ChatMessage.objects.create(thread=thread, sender=self.other, content="Need refresh")
+
+        notification.is_read = True
+        notification.save(update_fields=["is_read"])
+        participation.last_read_at = timezone.now()
+        participation.save(update_fields=["last_read_at"])
+
+        self.client.login(username="nav_user", password="pw")
+        response = self.client.get(reverse("live_nav_status"))
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        self.assertEqual(payload["unread_notifications_count"], 0)
+        self.assertEqual(payload["unread_chat_threads_count"], 0)

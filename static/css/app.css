@@ -313,8 +313,24 @@ a:focus {
     white-space: nowrap;
 }
 
+.nav-core-more .dropdown-menu {
+    min-width: 12rem;
+}
+
+.nav-more-toggle {
+    background: transparent;
+    border: 1px solid transparent;
+    line-height: 1.2;
+}
+
+.nav-more-toggle::after {
+    margin-left: 0.38rem;
+}
+
 .nav-tools-menu {
     min-width: 15.4rem;
+    max-height: min(70vh, 33rem);
+    overflow-y: auto;
 }
 
 .menu-section-title {
@@ -1487,8 +1503,12 @@ footer .text-muted {
         max-width: 100%;
     }
 
+    .nav-core-more .dropdown-menu {
+        min-width: 100%;
+    }
+
     .nav-tools-menu {
-        min-width: 14rem;
+        min-width: 100%;
     }
 
     .filter-panel {

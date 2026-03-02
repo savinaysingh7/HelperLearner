@@ -40,24 +40,32 @@ HelperLearner is a Django 6 knowledge marketplace where users post help requests
 
 ## Local Setup
 1. Clone the repository.
-2. Install dependencies:
+2. Create and activate a virtual environment (recommended):
+   ```bash
+   python -m venv venv
+   .\venv\Scripts\activate
+   ```
+3. Install dependencies:
    ```bash
    pip install -r requirements.txt
    ```
-3. Create a `.env` file:
+4. Create a `.env` file:
    ```env
    SECRET_KEY=your-secret-key-here
    DEBUG=True
    ALLOWED_HOSTS=127.0.0.1,localhost
    ```
-4. Run database migrations:
+5. Run database migrations:
    ```bash
    python manage.py migrate
    ```
-5. Start the development server:
+6. Start the development server:
    ```bash
    python manage.py runserver
    ```
+
+Requirements:
+- Python `3.12+` (Django `6.0.2` requirement).
 
 ## Email Setup
 Development uses console email output:
@@ -167,6 +175,14 @@ Run SLA reminders and milestone auto-release rules:
 python manage.py run_sla_engine
 ```
 
+## Runtime Diagnostics Command
+Run an end-to-end runtime sanity check (DB/cache/migrations/channels/celery/AI/logging):
+```bash
+python manage.py diagnose_runtime
+```
+
+This command exits with an error if critical checks fail.
+
 ## Webhook Requeue Command
 Requeue recent retryable failed webhook deliveries:
 ```bash
@@ -209,8 +225,10 @@ Useful flags:
 - `GET,POST /integrations/` API key + webhook management
 - `GET /moderation/` moderation queue (staff)
 - `GET /analytics/advanced/` analytics dashboard (staff)
+- `GET /api/me/live-status/` authenticated navbar counters (notifications/chat/KP/wallet)
 - `GET /ops/celery/` staff-only Celery worker/queue health snapshot (JSON)
 - `GET /ops/webhooks/` staff-only webhook failure backlog snapshot (JSON)
+- `GET /ops/runtime/` staff-only consolidated runtime diagnostics snapshot (JSON)
 - `POST /post/assist/` AI draft improvement endpoint (login + CSRF required)
 - `GET /jobs/` paid freelance jobs discovery
 - `GET,POST /jobs/post/` create paid freelance job and fund escrow
@@ -301,10 +319,20 @@ python manage.py seed_indian_demo_data --drop-superusers
    - requeue transient webhook failures when needed: `python manage.py requeue_failed_webhooks --minutes 240`
 4. Incident baseline:
    - use `X-Request-ID` from responses/logs for traceability
-   - inspect `server_log.txt` and Sentry events for stack traces
+   - inspect `logs/server.log` (or `LOG_FILE`) and Sentry events for stack traces
+   - run `python manage.py diagnose_runtime` to isolate infra/config issues quickly
 5. Rollback safety:
    - maintain DB backups before deploy
    - revert app release and run forward-only migration strategy
+
+### Logging Note (Windows / PowerShell)
+- Django writes structured logs to `logs/server.log` by default.
+- Override path with `LOG_FILE` in environment when needed.
+- Prefer running:
+  ```bash
+  python manage.py runserver
+  ```
+  instead of redirecting with `> logs/server.log`, which can create mixed/garbled encodings in PowerShell.
 
 ## Backup / Restore Drill (PostgreSQL)
 Run this monthly on staging to verify disaster recovery:

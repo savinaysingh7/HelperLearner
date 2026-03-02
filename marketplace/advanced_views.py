@@ -8,18 +8,20 @@ from django.contrib import messages
 from django.contrib.auth.decorators import login_required, user_passes_test
 from django.contrib.contenttypes.models import ContentType
 from django.db import transaction
-from django.db.models import Avg, Count, F, Sum
+from django.db.models import Avg, Count, F, Max, Q, Sum
 from django.db.models.functions import TruncMonth
 from django.http import JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.utils import timezone
 from django.views.decorators.csrf import csrf_protect
+from django.views.decorators.http import require_GET
 from django.views.decorators.http import require_POST
 
 from accounts.models import CustomUser
 from accounts.query_utils import annotate_user_metrics
 from accounts.trust import compute_trust_score_v2
 from accounts.utils import get_client_ip, log_event
+from helperlearner_root.runtime_checks import collect_runtime_snapshot
 from notifications.models import Notification
 
 from .forms import (
@@ -36,6 +38,7 @@ from .forms import (
 )
 from .models import (
     Comment,
+    ChatThreadParticipant,
     Experiment,
     FraudAlert,
     FreelanceJob,
@@ -150,6 +153,24 @@ def _completion_rate_for_user(user):
     if total == 0:
         return 0.0
     return round(((help_done + job_done) / total) * 100, 2)
+
+
+def _unread_chat_threads_for_user(user):
+    """Return unread chat-thread count for a user."""
+    participations = ChatThreadParticipant.objects.filter(user=user).annotate(
+        latest_incoming_at=Max(
+            'thread__messages__created_at',
+            filter=~Q(thread__messages__sender=user),
+        )
+    )
+    unread = 0
+    for participation in participations:
+        latest_incoming_at = participation.latest_incoming_at
+        if latest_incoming_at and (
+            participation.last_read_at is None or latest_incoming_at > participation.last_read_at
+        ):
+            unread += 1
+    return unread
 
 
 @login_required
@@ -1028,6 +1049,36 @@ def ops_webhook_status(request):
         'checked_at': now.isoformat(),
     }
     return JsonResponse(payload, status=503 if degraded else 200)
+
+
+@login_required
+@require_GET
+def live_nav_status(request):
+    """Return authenticated navbar counters for realtime UI sync."""
+    unread_notifications = Notification.objects.filter(user=request.user, is_read=False).count()
+    unread_chat_threads = _unread_chat_threads_for_user(request.user)
+    return JsonResponse(
+        {
+            'unread_notifications_count': unread_notifications,
+            'unread_chat_threads_count': unread_chat_threads,
+            'knowledge_points': request.user.knowledge_points,
+            'wallet_inr': str(request.user.wallet_inr),
+            'checked_at': timezone.now().isoformat(),
+        }
+    )
+
+
+@login_required
+@user_passes_test(lambda user: user.is_staff)
+def ops_runtime_status(request):
+    """Return staff-only consolidated runtime diagnostics snapshot."""
+    snapshot = collect_runtime_snapshot()
+    status_code = 200 if snapshot['healthy'] else 503
+    payload = {
+        'service': 'runtime',
+        **snapshot,
+    }
+    return JsonResponse(payload, status=status_code)
 
 
 @login_required
