@@ -127,6 +127,14 @@ urlpatterns = [
     path('trust-score/<str:username>/', advanced_views.trust_score_breakdown, name='trust_score_breakdown'),
     path('experiments/', advanced_views.experiment_console, name='experiment_console'),
     path('attachments/<str:target_type>/<int:target_id>/upload/', advanced_views.upload_attachment, name='upload_attachment'),
+    path('u/<str:username>/portfolio/', advanced_views.public_portfolio, name='public_portfolio'),
+    path('request/<int:pk>/recommended-helpers/', advanced_views.recommended_helpers, name='recommended_helpers'),
+    path(
+        'workspaces/<slug:slug>/projects/<int:project_id>/sprints/<int:sprint_id>/burndown/',
+        advanced_views.sprint_burndown_data,
+        name='sprint_burndown_data',
+    ),
     path('api/search/', views.SearchViewSet.as_view({'get': 'list'}), name='api-search'),
     path('api/', include(router.urls)),
 ]
+

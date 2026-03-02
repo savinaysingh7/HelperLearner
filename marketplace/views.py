@@ -164,25 +164,45 @@ def home(request):
 
 
 def _search_querysets(query):
-    """Return grouped request/user/skill search querysets for a single free-text query."""
+    """Return grouped request/user/skill search querysets with full-text ranking."""
     normalized_query = query.strip()
     if not normalized_query:
         return HelpRequest.objects.none(), CustomUser.objects.none(), Skill.objects.none()
 
-    request_results = (
-        HelpRequest.objects.select_related('user', 'accepted_by', 'skill_needed')
-        .prefetch_related('tags')
-        .filter(
-            Q(title__icontains=normalized_query)
-            | Q(description__icontains=normalized_query)
-            | Q(tags__name__icontains=normalized_query)
-            | Q(skill_needed__name__icontains=normalized_query)
-            | Q(user__username__icontains=normalized_query)
-            | Q(accepted_by__username__icontains=normalized_query)
+    use_fts = _is_postgres_backend()
+
+    if use_fts:
+        from django.contrib.postgres.search import SearchQuery, SearchRank, SearchVector
+
+        search_query = SearchQuery(normalized_query, search_type='websearch')
+        request_vector = SearchVector('title', weight='A') + SearchVector('description', weight='B')
+        request_results = (
+            HelpRequest.objects.select_related('user', 'accepted_by', 'skill_needed')
+            .prefetch_related('tags')
+            .annotate(rank=SearchRank(request_vector, search_query))
+            .filter(
+                Q(rank__gte=0.01)
+                | Q(tags__name__icontains=normalized_query)
+                | Q(skill_needed__name__icontains=normalized_query)
+            )
+            .distinct()
+            .order_by('-rank', '-created_at')
         )
-        .distinct()
-        .order_by('-created_at')
-    )
+    else:
+        request_results = (
+            HelpRequest.objects.select_related('user', 'accepted_by', 'skill_needed')
+            .prefetch_related('tags')
+            .filter(
+                Q(title__icontains=normalized_query)
+                | Q(description__icontains=normalized_query)
+                | Q(tags__name__icontains=normalized_query)
+                | Q(skill_needed__name__icontains=normalized_query)
+                | Q(user__username__icontains=normalized_query)
+                | Q(accepted_by__username__icontains=normalized_query)
+            )
+            .distinct()
+            .order_by('-created_at')
+        )
 
     user_results = (
         annotate_user_metrics(CustomUser.objects.prefetch_related('skills'))
@@ -199,6 +219,13 @@ def _search_querysets(query):
     )
 
     return request_results, user_results, skill_results
+
+
+def _is_postgres_backend():
+    """Check if the default database is PostgreSQL."""
+    from django.conf import settings as django_settings
+    engine = django_settings.DATABASES.get('default', {}).get('ENGINE', '')
+    return 'postgresql' in engine or 'postgis' in engine
 
 
 def unified_search(request):

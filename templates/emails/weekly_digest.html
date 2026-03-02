@@ -1,0 +1,48 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+    <meta charset="utf-8">
+</head>
+
+<body style="font-family: 'Segoe UI', Arial, sans-serif; background: #0f172a; color: #e2e8f0; margin: 0; padding: 0;">
+    <div style="max-width: 600px; margin: 0 auto; padding: 32px 24px;">
+        <div style="text-align: center; margin-bottom: 24px;">
+            <h1 style="color: #38bdf8; margin: 0; font-size: 28px;">HelperLearner</h1>
+        </div>
+        <div style="background: #1e293b; border-radius: 12px; padding: 32px; border: 1px solid #334155;">
+            <h2 style="color: #f8fafc; margin-top: 0;">Your weekly digest 📊</h2>
+            <p>Here's what happened on HelperLearner this week:</p>
+            <table style="width: 100%; border-collapse: collapse; margin: 16px 0;">
+                <tr>
+                    <td style="padding: 12px; background: #0f172a; border-radius: 8px; text-align: center; width: 33%;">
+                        <div style="font-size: 24px; font-weight: 700; color: #38bdf8;">{{ new_requests }}</div>
+                        <div style="font-size: 12px; color: #94a3b8;">New Requests</div>
+                    </td>
+                    <td style="padding: 12px; background: #0f172a; border-radius: 8px; text-align: center; width: 33%;">
+                        <div style="font-size: 24px; font-weight: 700; color: #22c55e;">{{ resolved_count }}</div>
+                        <div style="font-size: 12px; color: #94a3b8;">Resolved</div>
+                    </td>
+                    <td style="padding: 12px; background: #0f172a; border-radius: 8px; text-align: center; width: 33%;">
+                        <div style="font-size: 24px; font-weight: 700; color: #a78bfa;">{{ kp_earned }}</div>
+                        <div style="font-size: 12px; color: #94a3b8;">KP Earned</div>
+                    </td>
+                </tr>
+            </table>
+            {% if unread_notifications %}
+            <p style="color: #fbbf24;">📬 You have <strong>{{ unread_notifications }}</strong> unread notification{{
+                unread_notifications|pluralize }}.</p>
+            {% endif %}
+            <div style="text-align: center; margin-top: 24px;">
+                <a href="{{ site_url }}"
+                    style="background: #38bdf8; color: #0f172a; padding: 12px 32px; border-radius: 8px; text-decoration: none; font-weight: 600;">View
+                    Dashboard</a>
+            </div>
+        </div>
+        <p style="text-align: center; color: #64748b; font-size: 12px; margin-top: 24px;">
+            HelperLearner weekly digest — manage preferences in your profile settings.
+        </p>
+    </div>
+</body>
+
+</html>

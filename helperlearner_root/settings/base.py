@@ -60,6 +60,7 @@ INSTALLED_APPS = [
     "django.contrib.sessions",
     "django.contrib.messages",
     "django.contrib.staticfiles",
+    "django.contrib.postgres",
     "rest_framework",
     "django_filters",
     "axes",
@@ -227,6 +228,26 @@ AI_HTTP_RETRY_BASE_DELAY_SECONDS = config("AI_HTTP_RETRY_BASE_DELAY_SECONDS", de
 AI_ASSIST_TIMEOUT_SECONDS = config("AI_ASSIST_TIMEOUT_SECONDS", default=20, cast=int)
 AI_SUMMARY_TIMEOUT_SECONDS = config("AI_SUMMARY_TIMEOUT_SECONDS", default=10, cast=int)
 AI_REQUEST_ASSIST_CACHE_SECONDS = config("AI_REQUEST_ASSIST_CACHE_SECONDS", default=600, cast=int)
+AI_MODERATION_ENABLED = env_bool("AI_MODERATION_ENABLED", default=False)
+
+SITE_URL = config("SITE_URL", default="https://helperlearner.onrender.com")
+
+REST_FRAMEWORK = {
+    "DEFAULT_AUTHENTICATION_CLASSES": [
+        "rest_framework.authentication.SessionAuthentication",
+        "marketplace.api_auth.ApiKeyAuthentication",
+    ],
+    "DEFAULT_THROTTLE_CLASSES": [
+        "rest_framework.throttling.AnonRateThrottle",
+        "rest_framework.throttling.UserRateThrottle",
+    ],
+    "DEFAULT_THROTTLE_RATES": {
+        "anon": config("API_THROTTLE_ANON", default="100/day"),
+        "user": config("API_THROTTLE_USER", default="1000/day"),
+    },
+    "DEFAULT_PAGINATION_CLASS": "rest_framework.pagination.PageNumberPagination",
+    "PAGE_SIZE": 20,
+}
 AI_SUMMARY_CACHE_SECONDS = config("AI_SUMMARY_CACHE_SECONDS", default=3600, cast=int)
 PUBLIC_STATS_CACHE_SECONDS = config("PUBLIC_STATS_CACHE_SECONDS", default=45, cast=int)
 SLOW_REQUEST_THRESHOLD_MS = config("SLOW_REQUEST_THRESHOLD_MS", default=900, cast=int)

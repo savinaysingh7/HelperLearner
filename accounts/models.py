@@ -38,6 +38,11 @@ class CustomUser(AbstractUser):
     )
     trust_score = models.FloatField(default=0.0)
     trust_score_updated_at = models.DateTimeField(null=True, blank=True)
+    # Per-category notification preferences
+    notify_requests = models.BooleanField(default=True, help_text="Receive notifications about help requests")
+    notify_jobs = models.BooleanField(default=True, help_text="Receive notifications about freelance jobs")
+    notify_chat = models.BooleanField(default=True, help_text="Receive notifications about chat messages")
+    notify_kp = models.BooleanField(default=True, help_text="Receive notifications about KP transfers")
 
     def allows_in_app_notifications(self):
         """Return True when the user allows in-app notification delivery."""

@@ -1,18 +1,36 @@
-name: Django CI
+name: CI
 
 on:
   push:
-    branches: [main, master]
+    branches: [main, master, Different_High_Version]
   pull_request:
 
 jobs:
   test:
     runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_DB: helperlearner_test
+          POSTGRES_USER: helperlearner
+          POSTGRES_PASSWORD: testpassword
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
     env:
-      DJANGO_SETTINGS_MODULE: helperlearner_root.settings.dev
       SECRET_KEY: ci-secret-key-not-for-production
       DEBUG: "True"
-      ALLOWED_HOSTS: "127.0.0.1,localhost"
+      DATABASE_URL: postgres://helperlearner:testpassword@localhost:5432/helperlearner_test
+      CELERY_TASK_ALWAYS_EAGER: "True"
+      ALLOWED_HOSTS: "127.0.0.1,localhost,testserver"
+
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -32,8 +50,11 @@ jobs:
       - name: Django system checks
         run: python manage.py check
 
-      - name: Verify migrations are committed
-        run: python manage.py makemigrations --check --dry-run
+      - name: Collect static files
+        run: python manage.py collectstatic --no-input
+
+      - name: Run migrations
+        run: python manage.py migrate --no-input
 
       - name: Run test suite
-        run: python manage.py test
+        run: python manage.py test --verbosity=2

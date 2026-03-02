@@ -1164,3 +1164,73 @@ def experiment_console(request):
             'experiments': Experiment.objects.prefetch_related('variants').all(),
         },
     )
+
+
+def public_portfolio(request, username):
+    """Public portfolio page for a user — accessible without login."""
+    profile_user = get_object_or_404(CustomUser, username=username, is_active=True)
+    portfolio_items = PortfolioItem.objects.filter(user=profile_user).select_related('primary_skill')
+    return render(request, 'marketplace/public_portfolio.html', {
+        'profile_user': profile_user,
+        'portfolio_items': portfolio_items,
+    })
+
+
+@login_required
+@require_GET
+def recommended_helpers(request, pk):
+    """Return JSON list of recommended helpers for a help request."""
+    help_request = get_object_or_404(HelpRequest, pk=pk)
+    from .matching import get_recommended_helpers
+    helpers = get_recommended_helpers(help_request, limit=5)
+    data = [
+        {
+            'username': user.username,
+            'score': score,
+            'trust_score': str(getattr(user, 'trust_score', 0)),
+            'resolved_count': getattr(user, 'resolved_count', 0),
+        }
+        for user, score in helpers
+    ]
+    return JsonResponse({'helpers': data})
+
+
+@login_required
+@require_GET
+def sprint_burndown_data(request, slug, project_id, sprint_id):
+    """Return JSON burn-down data for a sprint."""
+    from .models import WorkspaceSprint, WorkspaceIssue
+
+    sprint = get_object_or_404(WorkspaceSprint, pk=sprint_id, project__pk=project_id)
+    if not sprint.started_at:
+        return JsonResponse({'error': 'Sprint not started'}, status=400)
+
+    issues = WorkspaceIssue.objects.filter(sprint=sprint)
+    total_points = sum(i.story_points or 0 for i in issues)
+
+    # Build daily data from sprint start
+    start = sprint.started_at.date()
+    end = (sprint.completed_at or timezone.now()).date()
+    current = start
+    daily_data = []
+    while current <= end:
+        done_points = sum(
+            i.story_points or 0
+            for i in issues
+            if i.status == 'done' and i.updated_at and i.updated_at.date() <= current
+        )
+        remaining = total_points - done_points
+        daily_data.append({'date': str(current), 'remaining': remaining, 'ideal': 0})
+        current += timedelta(days=1)
+
+    # Calculate ideal burndown line
+    total_days = len(daily_data)
+    if total_days > 1:
+        for i, point in enumerate(daily_data):
+            point['ideal'] = round(total_points * (1 - i / (total_days - 1)), 1)
+
+    return JsonResponse({
+        'sprint_name': sprint.name,
+        'total_points': total_points,
+        'daily': daily_data,
+    })

@@ -601,6 +601,7 @@ class Attachment(models.Model):
     )
     file = models.FileField(upload_to='attachments/%Y/%m/%d/')
     caption = models.CharField(max_length=140, blank=True)
+    download_count = models.PositiveIntegerField(default=0)
     created_at = models.DateTimeField(auto_now_add=True)
 
     def __str__(self):
