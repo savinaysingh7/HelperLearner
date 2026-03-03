@@ -2,11 +2,10 @@
 
 import logging
 
-from django.conf import settings
 from django.db.models import Avg, Count, Q
 
 from accounts.models import CustomUser
-from .models import HelpRequest, Rating
+from .models import HelpRequest
 
 logger = logging.getLogger(__name__)
 
@@ -33,8 +32,8 @@ def get_recommended_helpers(help_request, limit=5):
         .exclude(pk=poster.pk)
         .annotate(
             resolved_count=Count(
-                'claimed_requests',
-                filter=Q(claimed_requests__status='resolved'),
+                'accepted_tasks',
+                filter=Q(accepted_tasks__status='resolved'),
             ),
             avg_rating=Avg(
                 'ratings_received__score',

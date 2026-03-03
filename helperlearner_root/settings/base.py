@@ -249,6 +249,11 @@ REST_FRAMEWORK = {
     "DEFAULT_PAGINATION_CLASS": "rest_framework.pagination.PageNumberPagination",
     "PAGE_SIZE": 20,
 }
+# Razorpay Payment Gateway
+RAZORPAY_KEY_ID = config("RAZORPAY_KEY_ID", default="")
+RAZORPAY_KEY_SECRET = config("RAZORPAY_KEY_SECRET", default="")
+RAZORPAY_WEBHOOK_SECRET = config("RAZORPAY_WEBHOOK_SECRET", default="")
+
 AI_SUMMARY_CACHE_SECONDS = config("AI_SUMMARY_CACHE_SECONDS", default=3600, cast=int)
 PUBLIC_STATS_CACHE_SECONDS = config("PUBLIC_STATS_CACHE_SECONDS", default=45, cast=int)
 SLOW_REQUEST_THRESHOLD_MS = config("SLOW_REQUEST_THRESHOLD_MS", default=900, cast=int)

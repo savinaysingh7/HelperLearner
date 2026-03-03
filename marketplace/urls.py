@@ -1,7 +1,7 @@
 from django.urls import include, path
 from rest_framework.routers import DefaultRouter
 
-from . import advanced_views, chat_views, jira_views, views
+from . import advanced_views, chat_views, jira_views, payments, views
 
 router = DefaultRouter()
 router.register(r'requests', views.HelpRequestViewSet, basename='request')
@@ -134,7 +134,12 @@ urlpatterns = [
         advanced_views.sprint_burndown_data,
         name='sprint_burndown_data',
     ),
+    path('wallet/topup/', payments.wallet_topup, name='wallet_topup'),
+    path('wallet/topup/verify/', payments.wallet_topup_verify, name='wallet_topup_verify'),
+    path('jobs/<int:job_pk>/milestones/<int:milestone_id>/fund/', payments.fund_milestone, name='fund_milestone'),
+    path('webhooks/razorpay/', payments.razorpay_webhook, name='razorpay_webhook'),
     path('api/search/', views.SearchViewSet.as_view({'get': 'list'}), name='api-search'),
     path('api/', include(router.urls)),
 ]
+
 

@@ -2,13 +2,11 @@
 
 import json
 import logging
-from datetime import timedelta
 from io import BytesIO
 from zipfile import ZipFile
 
 from django.contrib.auth.decorators import login_required
 from django.http import HttpResponse
-from django.utils import timezone
 
 from marketplace.models import (
     Attachment,
@@ -67,7 +65,7 @@ def export_my_data(request):
         ),
         'proposals_submitted': _serialize_qs(
             HelpRequestProposal.objects.filter(applicant=user),
-            ['id', 'request_id', 'proposed_kp', 'message', 'created_at'],
+            ['id', 'request_id', 'proposed_kp', 'cover_note', 'created_at'],
         ),
         'freelance_jobs_as_client': _serialize_qs(
             FreelanceJob.objects.filter(client=user),
@@ -79,7 +77,7 @@ def export_my_data(request):
         ),
         'job_proposals': _serialize_qs(
             FreelanceJobProposal.objects.filter(applicant=user),
-            ['id', 'job_id', 'proposed_total_inr', 'message', 'created_at'],
+            ['id', 'job_id', 'proposed_total_inr', 'cover_note', 'created_at'],
         ),
         'comments': _serialize_qs(
             Comment.objects.filter(user=user),
@@ -91,23 +89,23 @@ def export_my_data(request):
         ),
         'kp_transfers_sent': _serialize_qs(
             KPTransfer.objects.filter(sender=user),
-            ['id', 'recipient_id', 'amount', 'reason', 'created_at'],
+            ['id', 'recipient_id', 'amount', 'created_at'],
         ),
         'kp_transfers_received': _serialize_qs(
             KPTransfer.objects.filter(recipient=user),
-            ['id', 'sender_id', 'amount', 'reason', 'created_at'],
+            ['id', 'sender_id', 'amount', 'created_at'],
         ),
         'ratings_given': _serialize_qs(
-            Rating.objects.filter(rater=user),
-            ['id', 'rated_user_id', 'score', 'comment', 'created_at'],
+            Rating.objects.filter(given_by=user),
+            ['id', 'given_to_id', 'score', 'created_at'],
         ),
         'ratings_received': _serialize_qs(
-            Rating.objects.filter(rated_user=user),
-            ['id', 'rater_id', 'score', 'comment', 'created_at'],
+            Rating.objects.filter(given_to=user),
+            ['id', 'given_by_id', 'score', 'created_at'],
         ),
         'portfolio_items': _serialize_qs(
             PortfolioItem.objects.filter(user=user),
-            ['id', 'title', 'description', 'tech_stack', 'url', 'created_at'],
+            ['id', 'title', 'summary', 'project_url', 'evidence_url', 'created_at'],
         ),
         'notifications': _serialize_qs(
             Notification.objects.filter(user=user).order_by('-created_at')[:200],
