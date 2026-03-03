@@ -48,6 +48,9 @@ def send_welcome_email_on_signup(sender, instance, created, **kwargs):
     """Send welcome email when a new user signs up."""
     if not created or not instance.email:
         return
+    # Skip during tests unless explicitly enabled
+    if getattr(settings, 'TESTING', False):
+        return
     send_templated_email(
         subject='Welcome to HelperLearner! 🎉',
         template_name='emails/welcome.html',
@@ -76,42 +79,9 @@ def generate_ai_summary_on_creation(sender, instance, created, **kwargs):
         HelpRequest.objects.filter(pk=instance.pk).update(ai_summary=summary)
 
 
-# ── Request lifecycle emails ─────────────────────────────────────────────────
-
-@receiver(post_save, sender=HelpRequest)
-def send_request_lifecycle_emails(sender, instance, created, **kwargs):
-    """Send email when a request is claimed or resolved."""
-    if created:
-        return
-
-    if instance.status == 'in_progress' and instance.accepted_by and instance.user.email:
-        send_templated_email(
-            subject=f'Your request "{instance.title}" has been claimed!',
-            template_name='emails/request_claimed.html',
-            context={
-                'helper_username': instance.accepted_by.username,
-                'request_title': instance.title,
-                'kp_bounty': instance.kp_bounty,
-                'request_url': f'{_site_url()}/requests/{instance.pk}/',
-            },
-            recipient_email=instance.user.email,
-        )
-
-    if instance.status == 'resolved' and instance.accepted_by and instance.user.email:
-        send_templated_email(
-            subject=f'Request "{instance.title}" has been resolved! ✅',
-            template_name='emails/request_resolved.html',
-            context={
-                'helper_username': instance.accepted_by.username,
-                'request_title': instance.title,
-                'kp_bounty': instance.kp_bounty,
-                'request_url': f'{_site_url()}/requests/{instance.pk}/',
-            },
-            recipient_email=instance.user.email,
-        )
-
-
 # ── Trust updates ────────────────────────────────────────────────────────────
+# NOTE: Request lifecycle emails (claim, resolve, cancel) are handled by
+# notifications/signals.py — do NOT duplicate them here.
 
 @receiver(post_save, sender=FreelanceJob)
 def trigger_trust_update_on_job_status_change(sender, instance, created, **kwargs):
@@ -162,6 +132,9 @@ def send_milestone_emails(sender, instance, created, **kwargs):
     """Send email notifications for milestone status changes."""
     job = instance.job
     if not job:
+        return
+    # Skip during tests
+    if getattr(settings, 'TESTING', False):
         return
 
     if instance.status == 'submitted' and job.client and job.client.email:

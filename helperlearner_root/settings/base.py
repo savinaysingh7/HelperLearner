@@ -8,6 +8,7 @@ from decouple import config
 from django.core.exceptions import ImproperlyConfigured
 
 BASE_DIR = Path(__file__).resolve().parent.parent.parent
+TESTING = 'test' in sys.argv
 logger = logging.getLogger(__name__)
 LOG_FILE_PATH = Path(config("LOG_FILE", default=str(BASE_DIR / "logs" / "server.log")))
 LOG_FILE_PATH.parent.mkdir(parents=True, exist_ok=True)
