@@ -58,9 +58,11 @@ cover/
 
 # Django stuff:
 *.log
+server_log.txt
 local_settings.py
 db.sqlite3
 db.sqlite3-journal
+SEEDED_CREDENTIALS.md
 
 # Flask stuff:
 instance/
