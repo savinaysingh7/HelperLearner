@@ -1,11 +1,13 @@
 from django.contrib import admin
 from django.urls import path, include
+from django.views.generic.base import RedirectView
 
 from accounts import views as account_views
 from helperlearner_root import views as core_views
 
 urlpatterns = [
     path('admin/', admin.site.urls),
+    path('favicon.ico', RedirectView.as_view(url='/static/favicon.svg', permanent=True), name='favicon'),
     path('healthz/', core_views.health_check, name='health_check'),
     path('', include('marketplace.urls')),
     path('kp/claim-daily/', account_views.claim_daily_kp, name='claim_daily_kp'),

@@ -1,0 +1,67 @@
+{% extends "base.html" %}
+{% block title %}KP Marketplace - HelperLearner{% endblock %}
+
+{% block content %}
+<div class="container py-5">
+    <div class="row mb-4">
+        <div class="col">
+            <h1 class="h2">KP Marketplace</h1>
+            <p class="text-muted">Spend your Knowledge Points on exclusive platform perks.</p>
+        </div>
+        <div class="col-auto">
+            <div class="card bg-primary text-white">
+                <div class="card-body py-2 px-4">
+                    <div class="small opacity-75">Your Balance</div>
+                    <div class="h4 mb-0">{{ user_kp }} KP</div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    {% if purchased %}
+    <div class="card mb-5 border-success">
+        <div class="card-header bg-success text-white">Your Active Perks</div>
+        <div class="list-group list-group-flush">
+            {% for purchase in purchased %}
+            <div class="list-group-item d-flex justify-content-between align-items-center">
+                <div>
+                    <h6 class="mb-0">{{ purchase.get_perk_type_display }}</h6>
+                    <small class="text-muted">Purchased on {{ purchase.created_at|date }}</small>
+                </div>
+                <span class="badge bg-success rounded-pill">Active</span>
+            </div>
+            {% endfor %}
+        </div>
+    </div>
+    {% endif %}
+
+    <div class="row row-cols-1 row-cols-md-2 g-4">
+        {% for perk in perks %}
+        <div class="col">
+            <div class="card h-100 shadow-sm">
+                <div class="card-body">
+                    <h5 class="card-title">{{ perk.name }}</h5>
+                    <p class="card-text text-muted">{{ perk.description }}</p>
+                    <div class="d-flex justify-content-between align-items-center mt-4">
+                        <span class="h5 mb-0 text-primary">{{ perk.cost }} KP</span>
+                        <form action="{% url 'purchase_perk' %}" method="POST">
+                            {% csrf_token %}
+                            <input type="hidden" name="perk_id" value="{{ perk.id }}">
+                            <button type="submit" class="btn btn-outline-primary" 
+                                    {% if user_kp < perk.cost %}disabled{% endif %}>
+                                Purchase Perk
+                            </button>
+                        </form>
+                    </div>
+                </div>
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+
+    <div class="mt-5 text-center">
+        <p class="text-muted">Earn more KP by resolving help requests and participating in the community.</p>
+        <a href="{% url 'request_list' %}" class="btn btn-link">Browse Help Requests</a>
+    </div>
+</div>
+{% endblock %}
