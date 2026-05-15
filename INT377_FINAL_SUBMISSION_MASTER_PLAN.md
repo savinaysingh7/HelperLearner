@@ -520,6 +520,317 @@ git push origin main
 
 ---
 
+### From Unit III: Cloud Services (AWS)
+**Applied Concepts:** AWS EC2, Cloud Economics, Free Tier Strategy
+
+#### 7.7 AWS EC2 Deployment (FREE Tier - 750 hours/month)
+
+**Step 1: Set Up AWS Billing Alarms (CRITICAL - Do this FIRST!)**
+```bash
+# Log into AWS Console → CloudWatch → Alarms → Billing
+# 1. Create alarm for when bill exceeds $0.10 (₹8)
+# 2. Set notification to your email
+# This prevents accidental charges
+```
+
+**Step 2: Create EC2 Instance**
+```bash
+# AWS Console → EC2 → Launch Instance
+# Select:
+#   - AMI: Ubuntu 22.04 LTS (Free Tier eligible)
+#   - Instance Type: t2.micro (Free Tier)
+#   - Storage: 30 GB (Free Tier includes 30 GB/month)
+#   - Security Group: Allow SSH (port 22), HTTP (80), HTTPS (443), Custom TCP 8000
+# Download key pair (.pem file) - store safely!
+```
+
+**Step 3: Connect to EC2 Instance**
+```bash
+# Replace <your-instance-ip> with actual EC2 public IP
+ssh -i "your-key.pem" ubuntu@<your-instance-ip>
+
+# Update system
+sudo apt update && sudo apt upgrade -y
+
+# Install Docker
+curl -fsSL https://get.docker.com -o get-docker.sh
+sudo sh get-docker.sh
+sudo usermod -aG docker $USER
+newgrp docker
+
+# Install Docker Compose
+sudo curl -L "https://github.com/docker/compose/releases/download/v2.20.0/docker-compose-$(uname -s)-$(uname -m)" -o /usr/local/bin/docker-compose
+sudo chmod +x /usr/local/bin/docker-compose
+
+# Verify installations
+docker --version
+docker-compose --version
+```
+
+**Step 4: Deploy Your App on EC2**
+```bash
+# Clone your GitHub repository on EC2
+git clone https://github.com/savinaysingh7/HelperLearner.git
+cd HelperLearner
+
+# Create .env file with production settings
+cat > .env << EOF
+DEBUG=False
+ALLOWED_HOSTS=<your-instance-ip>,localhost
+SECRET_KEY=your-production-secret-key-here
+DATABASE_URL=postgresql://user:password@db:5432/helperlearner
+EOF
+
+# Start with docker-compose
+docker-compose up -d
+
+# Verify services
+docker-compose ps
+curl http://localhost:8000
+
+# View logs
+docker-compose logs -f web
+```
+
+**Step 5: Configure Nginx Reverse Proxy (Optional but Recommended)**
+```bash
+# Install Nginx
+sudo apt install nginx -y
+
+# Create Nginx config
+sudo tee /etc/nginx/sites-available/helperlearner > /dev/null << EOF
+server {
+    listen 80;
+    server_name <your-instance-ip>;
+
+    location / {
+        proxy_pass http://localhost:8000;
+        proxy_set_header Host \$host;
+        proxy_set_header X-Real-IP \$remote_addr;
+        proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto \$scheme;
+    }
+
+    location /metrics {
+        proxy_pass http://localhost:9090;
+    }
+
+    location /grafana {
+        proxy_pass http://localhost:3000;
+    }
+}
+EOF
+
+# Enable site
+sudo ln -s /etc/nginx/sites-available/helperlearner /etc/nginx/sites-enabled/
+sudo nginx -t
+sudo systemctl restart nginx
+```
+
+**Step 6: Enable Auto-Start on EC2 Reboot**
+```bash
+# Create systemd service for docker-compose
+sudo tee /etc/systemd/system/helperlearner.service > /dev/null << EOF
+[Unit]
+Description=HelperLearner Docker Compose
+After=docker.service
+Requires=docker.service
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+WorkingDirectory=/home/ubuntu/HelperLearner
+ExecStart=/usr/local/bin/docker-compose up -d
+ExecStop=/usr/local/bin/docker-compose down
+User=ubuntu
+
+[Install]
+WantedBy=multi-user.target
+EOF
+
+# Enable auto-start
+sudo systemctl enable helperlearner.service
+```
+
+**Cost Calculation:**
+- t2.micro instance: **FREE** (750 hours/month)
+- Storage (30 GB): **FREE** (included in Free Tier)
+- Data transfer OUT: **FREE** (1 GB/month free)
+- **Total: $0** ✅
+
+---
+
+#### 7.8 GitHub Actions → AWS EC2 Auto-Deploy Pipeline
+
+**Update: `.github/workflows/ci-cd.yml` - Add deployment stage**
+
+```yaml
+name: HelperLearner CI/CD Pipeline
+
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+    branches: [main]
+
+jobs:
+  test:
+    # ... (same as before)
+
+  build:
+    # ... (same as before)
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+    
+    steps:
+    - uses: actions/checkout@v3
+    
+    - name: Deploy to AWS EC2
+      uses: appleboy/ssh-action@master
+      with:
+        host: ${{ secrets.AWS_EC2_HOST }}
+        username: ubuntu
+        key: ${{ secrets.AWS_EC2_KEY }}
+        script: |
+          cd ~/HelperLearner
+          git pull origin main
+          docker-compose pull
+          docker-compose up -d --force-recreate
+          docker-compose exec -T web python manage.py migrate
+          echo "✅ Deployment successful!"
+    
+    - name: Slack Notification
+      uses: slackapi/slack-github-action@v1.24.0
+      with:
+        payload: |
+          {
+            "text": "✅ HelperLearner deployed to AWS EC2",
+            "blocks": [
+              {
+                "type": "section",
+                "text": {
+                  "type": "mrkdwn",
+                  "text": "Deployment to AWS EC2\nBranch: main\nApp: http://${{ secrets.AWS_EC2_HOST }}"
+                }
+              }
+            ]
+          }
+      env:
+        SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+```
+
+**GitHub Secrets to Add:**
+1. `AWS_EC2_HOST` - Your EC2 instance public IP
+2. `AWS_EC2_KEY` - Content of your .pem private key
+3. `SLACK_WEBHOOK_URL` - (Optional) For notifications
+
+**Workflow:**
+```
+Push to main → GitHub Actions Tests Pass → Build Docker Image → Auto-Deploy to EC2
+```
+
+---
+
+#### 7.9 Alternative AWS Deployment Options
+
+**Option 1: AWS Elastic Beanstalk (Managed, Easiest)**
+```bash
+# Step 1: Install EB CLI
+pip install awsebcli
+
+# Step 2: Initialize
+eb init -p docker helperlearner --region us-east-1
+
+# Step 3: Create environment and deploy
+eb create helperlearner-env
+eb deploy
+
+# Step 4: Open in browser
+eb open
+```
+
+**Pros:** Auto-scaling, load balancing, monitoring included
+**Cons:** Slightly higher cost (but still free tier eligible)
+
+---
+
+**Option 2: AWS Lambda (Serverless, Most Cost-Effective)**
+```bash
+# For serverless Django using Zappa:
+pip install zappa
+
+# Initialize
+zappa init
+
+# Deploy
+zappa deploy production
+
+# Update (redeploy)
+zappa update production
+```
+
+**Pros:** 1 million free requests/month, auto-scaling
+**Cons:** Cold starts, not ideal for always-on apps
+
+---
+
+**AWS Free Tier Coverage:**
+| Service | Free Tier | Use Case |
+|---------|-----------|----------|
+| **EC2** | 750 hrs/mo t2.micro | Always-on web app ✅ |
+| **RDS** | 750 hrs/mo db.t2.micro | Database |
+| **S3** | 5 GB storage | File uploads |
+| **CloudWatch** | 10 alarms | Monitoring |
+| **Data Transfer** | 1 GB/mo OUT | API responses |
+| **Lambda** | 1M requests/mo | Serverless functions |
+| **Elastic Beanstalk** | Included with EC2 | App hosting |
+
+---
+
+#### 7.10 Real DevOps Flow (From Laptop to AWS)
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│  Developer's Laptop (Local Development)                     │
+│  ├─ Edit code in VS Code                                    │
+│  ├─ Test with docker-compose up                             │
+│  └─ git push origin feature/new-feature                     │
+└─────────────────────┬───────────────────────────────────────┘
+                      │
+┌─────────────────────▼───────────────────────────────────────┐
+│  GitHub Repository                                          │
+│  └─ Webhook triggers GitHub Actions                         │
+└─────────────────────┬───────────────────────────────────────┘
+                      │
+┌─────────────────────▼───────────────────────────────────────┐
+│  GitHub Actions CI/CD Pipeline                              │
+│  ├─ Stage 1: Run pytest                                     │
+│  ├─ Stage 2: Build Docker image                             │
+│  └─ Stage 3: If main branch → Deploy to EC2                 │
+└─────────────────────┬───────────────────────────────────────┘
+                      │
+┌─────────────────────▼───────────────────────────────────────┐
+│  AWS EC2 Instance (t2.micro - FREE)                         │
+│  ├─ SSH into instance                                       │
+│  ├─ Pull latest code                                        │
+│  ├─ Run migrations                                          │
+│  ├─ Restart docker-compose                                  │
+│  └─ Django app live at http://<public-ip>                   │
+└─────────────────────┬───────────────────────────────────────┘
+                      │
+┌─────────────────────▼───────────────────────────────────────┐
+│  Monitoring (Prometheus + Grafana)                          │
+│  ├─ Scrape metrics from app                                 │
+│  ├─ Display on Grafana dashboard                            │
+│  └─ Alert if CPU > 80%                                      │
+└─────────────────────────────────────────────────────────────┘
+```
+
+---
+
 ### Summary: Free Implementation Checklist
 
 | Concept | Tool | Cost | Status |
@@ -577,20 +888,34 @@ git push origin main
 - [ ] **Build Image:** Pipeline builds Docker image on success
 - [ ] **Security:** Add GitHub Secrets for sensitive data
 
-### Phase 3: Monitoring (Week 3)
-- [ ] **Prometheus + Grafana:** Add to docker-compose.yml
+### Phase 3: AWS EC2 Deployment (Week 3)
+- [ ] **AWS Account:** Sign up for AWS Free Tier (if not done)
+- [ ] **Billing Alarm:** Set CloudWatch alert for $0.10 threshold
+- [ ] **EC2 Instance:** Launch t2.micro Ubuntu instance
+- [ ] **Docker Setup:** Install Docker & Docker Compose on EC2
+- [ ] **Deploy App:** Push code → GitHub Actions auto-deploys to EC2
+- [ ] **Nginx Setup:** Configure reverse proxy (optional but recommended)
+- [ ] **Auto-Start:** Create systemd service for docker-compose
+- [ ] **Test:** Verify app runs at http://<your-ec2-ip>
+
+### Phase 4: Monitoring (Week 4)
+- [ ] **Prometheus + Grafana:** Add to docker-compose.yml on EC2
 - [ ] **Django Metrics:** Install `django-prometheus` 
 - [ ] **Dashboard:** Create Grafana dashboard showing CPU/Memory/Requests
 - [ ] **Health Checks:** Implement health endpoint `/health`
+- [ ] **Access:** Verify Grafana at http://<your-ec2-ip>/grafana
 
-### Phase 4: Documentation & Demo
-- [ ] **README Update:** Document how to run with Docker Compose
+### Phase 5: Documentation & Demo
+- [ ] **README Update:** Document how to run with Docker Compose locally and deploy to AWS
+- [ ] **Architecture Diagram:** Show GitHub → Actions → EC2 → Monitoring flow
+- [ ] **Cost Analysis:** Explain AWS Free Tier savings ($0 for this setup)
 - [ ] **Demo Flow:** 
   1. Show git commits following DevOps patterns
-  2. Push to GitHub → Watch GitHub Actions run tests + build
-  3. Show Prometheus metrics
-  4. Show Grafana dashboard
-- [ ] **Viva Preparation:** Be ready to explain IaC, CI/CD, monitoring concepts
+  2. Push to GitHub → Watch GitHub Actions run tests + build + deploy
+  3. Access app at AWS EC2 public IP
+  4. Show Prometheus metrics
+  5. Show Grafana dashboard
+- [ ] **Viva Preparation:** Be ready to explain IaC, CI/CD, cloud services, monitoring concepts
 
 ---
 
