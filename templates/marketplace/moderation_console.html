@@ -1,0 +1,108 @@
+{% extends 'base.html' %}
+
+{% block title %}Moderation Console{% endblock %}
+
+{% block content %}
+<section class="page-head">
+    <span class="eyebrow"><i class="bi bi-shield-lock"></i>Moderation</span>
+    <h1 class="h3">Flag Queue & Audit Console</h1>
+    <p class="text-muted mb-0">Review reports, fraud signals, disputes, and apply account actions.</p>
+</section>
+
+<div class="row g-3 mb-3">
+    <div class="col-12 col-lg-4">
+        <div class="card h-100">
+            <div class="card-header fw-semibold">Open Flags</div>
+            <ul class="list-group list-group-flush">
+                {% for flag in open_flags %}
+                    <li class="list-group-item">
+                        <div class="small text-muted">{{ flag.target_type }} #{{ flag.target_id }}</div>
+                        <div>{{ flag.reason|truncatechars:120 }}</div>
+                        <div class="d-flex gap-1 mt-2">
+                            <form method="post" action="{% url 'moderation_flag_action' flag.pk 'reviewed' %}">{% csrf_token %}<button class="btn btn-sm btn-outline-primary">Review</button></form>
+                            <form method="post" action="{% url 'moderation_flag_action' flag.pk 'dismissed' %}">{% csrf_token %}<button class="btn btn-sm btn-outline-secondary">Dismiss</button></form>
+                            <form method="post" action="{% url 'moderation_flag_action' flag.pk 'actioned' %}">{% csrf_token %}<button class="btn btn-sm btn-outline-danger">Action</button></form>
+                        </div>
+                    </li>
+                {% empty %}
+                    <li class="list-group-item text-muted">No open flags.</li>
+                {% endfor %}
+            </ul>
+        </div>
+    </div>
+
+    <div class="col-12 col-lg-4">
+        <div class="card h-100">
+            <div class="card-header fw-semibold">Active Fraud Alerts</div>
+            <ul class="list-group list-group-flush">
+                {% for alert in active_alerts %}
+                    <li class="list-group-item">
+                        <div class="fw-semibold">{{ alert.get_alert_type_display }} <span class="badge text-bg-warning">{{ alert.severity }}</span></div>
+                        <div class="small text-muted">{{ alert.description|truncatechars:100 }}</div>
+                        {% if alert.user %}<div class="small">User: {{ alert.user.username }}</div>{% endif %}
+                    </li>
+                {% empty %}
+                    <li class="list-group-item text-muted">No active alerts.</li>
+                {% endfor %}
+            </ul>
+        </div>
+    </div>
+
+    <div class="col-12 col-lg-4">
+        <div class="card h-100">
+            <div class="card-header fw-semibold">Open Disputes</div>
+            <ul class="list-group list-group-flush">
+                {% for dispute in open_disputes %}
+                    <li class="list-group-item">
+                        <a class="fw-semibold text-decoration-none" href="{% url 'freelance_job_detail' dispute.job.pk %}">{{ dispute.job.title }}</a>
+                        <div class="small text-muted">Opened by {{ dispute.opened_by.username }}</div>
+                        <div class="small">{{ dispute.reason|truncatechars:90 }}</div>
+                    </li>
+                {% empty %}
+                    <li class="list-group-item text-muted">No open disputes.</li>
+                {% endfor %}
+            </ul>
+        </div>
+    </div>
+</div>
+
+<div class="card">
+    <div class="card-header fw-semibold">Suspend/Unsuspend User</div>
+    <div class="card-body">
+        <div class="table-responsive">
+            <table class="table align-middle mb-0">
+                <thead><tr><th>User</th><th>Status</th><th>Action</th></tr></thead>
+                <tbody>
+                    {% for u in recent_users %}
+                        <tr>
+                            <td>{{ u.username }}</td>
+                            <td>
+                                {% if u.is_currently_suspended %}
+                                    <span class="badge text-bg-danger">Suspended</span>
+                                {% else %}
+                                    <span class="badge text-bg-success">Active</span>
+                                {% endif %}
+                            </td>
+                            <td>
+                                {% if u.is_currently_suspended %}
+                                    <form method="post" action="{% url 'unsuspend_user_account' u.pk %}">
+                                        {% csrf_token %}
+                                        <button class="btn btn-sm btn-outline-success" type="submit">Unsuspend</button>
+                                    </form>
+                                {% else %}
+                                    <form method="post" action="{% url 'suspend_user_account' u.pk %}" class="d-flex gap-1">
+                                        {% csrf_token %}
+                                        <input class="form-control form-control-sm" name="duration_days" type="number" min="1" value="7" style="max-width:80px;">
+                                        <input class="form-control form-control-sm" name="reason" type="text" placeholder="Reason">
+                                        <button class="btn btn-sm btn-outline-danger" type="submit">Suspend</button>
+                                    </form>
+                                {% endif %}
+                            </td>
+                        </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+{% endblock %}

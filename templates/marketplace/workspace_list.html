@@ -1,0 +1,47 @@
+{% extends 'base.html' %}
+
+{% block title %}Team Workspaces{% endblock %}
+
+{% block content %}
+<section class="page-head">
+    <span class="eyebrow"><i class="bi bi-people-fill"></i>Team Workspaces</span>
+    <h1 class="h3">Shared Project Accounts</h1>
+    <p class="text-muted mb-0">Collaborate with role permissions and shared wallets.</p>
+</section>
+
+<div class="row g-3">
+    <div class="col-12 col-lg-5">
+        <div class="card h-100">
+            <div class="card-header fw-semibold">Create Workspace</div>
+            <div class="card-body">
+                <form method="post" class="vstack gap-2">
+                    {% csrf_token %}
+                    {{ form.name.label_tag }}
+                    {{ form.name }}
+                    {{ form.description.label_tag }}
+                    {{ form.description }}
+                    <button class="btn btn-primary" type="submit">Create</button>
+                </form>
+            </div>
+        </div>
+    </div>
+    <div class="col-12 col-lg-7">
+        <div class="card h-100">
+            <div class="card-header fw-semibold">Your Workspaces</div>
+            <ul class="list-group list-group-flush">
+                {% for membership in memberships %}
+                    <li class="list-group-item d-flex justify-content-between align-items-center gap-2">
+                        <div>
+                            <a class="fw-semibold text-decoration-none" href="{% url 'workspace_detail' membership.workspace.slug %}">{{ membership.workspace.name }}</a>
+                            <div class="small text-muted">Role: {{ membership.get_role_display }} | Wallet: &#8377;{{ membership.workspace.wallet_inr }}</div>
+                        </div>
+                        <span class="badge text-bg-secondary">{{ membership.workspace.memberships.count }} members</span>
+                    </li>
+                {% empty %}
+                    <li class="list-group-item text-muted">No workspace memberships yet.</li>
+                {% endfor %}
+            </ul>
+        </div>
+    </div>
+</div>
+{% endblock %}

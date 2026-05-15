@@ -3,8 +3,11 @@ import logging
 from urllib.parse import urlencode
 
 import django_filters
+from django.conf import settings
+from django.contrib.contenttypes.models import ContentType
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
+from django.core.cache import cache
 from django.core.paginator import Paginator
 from django.db import transaction
 from django.db.models import Count, F, OuterRef, Q, Subquery, Value
@@ -18,6 +21,7 @@ from django_ratelimit.decorators import ratelimit
 from django_filters.rest_framework import DjangoFilterBackend
 from rest_framework import mixins, viewsets
 from rest_framework.decorators import action
+from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 
 from accounts.models import CustomUser
@@ -27,50 +31,138 @@ from .ai_assistant import generate_request_assistance
 from .forms import CommentForm, HelpRequestForm, RatingForm, SavedSearchForm, SearchForm
 from .models import Comment, HelpRequest, Rating, SavedSearch, Skill, Tag
 from .serializers import (
+    FreelanceJobSerializer,
     HelpRequestSerializer,
     PublicCommentSerializer,
     PublicUserSerializer,
     SkillSerializer,
+    WorkspaceIssueCommentSerializer,
+    WorkspaceIssueSerializer,
+    WorkspaceProjectSerializer,
 )
+from .services import (
+    RequestLifecycleError,
+    cancel_help_request,
+    claim_help_request,
+    evaluate_job_collusion,
+    record_wallet_entry,
+    resolve_help_request,
+)
+from .webhooks import dispatch_webhook_event
 
 logger = logging.getLogger(__name__)
 
 
+def _cache_get_or_set(cache_key, timeout_seconds, builder):
+    """Return cached value when enabled, else compute using the builder callback."""
+    if timeout_seconds <= 0:
+        return builder()
+    cached = cache.get(cache_key)
+    if cached is not None:
+        return cached
+    value = builder()
+    cache.set(cache_key, value, timeout_seconds)
+    return value
+
+
+def _ordered_by_ids(queryset, ordered_ids):
+    """Materialize queryset ordered to match the original id list sequence."""
+    if not ordered_ids:
+        return []
+    order_index = {pk: idx for idx, pk in enumerate(ordered_ids)}
+    items = list(queryset.filter(pk__in=ordered_ids))
+    items.sort(key=lambda item: order_index.get(item.pk, len(order_index)))
+    return items
+
+
 def home(request):
     """Render the homepage with live user/open-request stats and recent opportunities."""
-    context = {
-        'total_users': CustomUser.objects.count(),
-        'open_requests': HelpRequest.objects.filter(status='open').count(),
-        'recent_requests': (
+    cache_ttl = getattr(settings, 'PUBLIC_STATS_CACHE_SECONDS', 45)
+    stats = _cache_get_or_set(
+        'home:stats:v1',
+        cache_ttl,
+        lambda: {
+            'total_users': CustomUser.objects.count(),
+            'open_requests': HelpRequest.objects.filter(status='open').count(),
+            'open_paid_jobs': FreelanceJob.objects.filter(status='open').count(),
+        },
+    )
+    recent_request_ids = _cache_get_or_set(
+        'home:recent_requests:v1',
+        cache_ttl,
+        lambda: list(
             HelpRequest.objects.filter(status='open')
-            .select_related('skill_needed')
-            .prefetch_related('tags')
-            .order_by('-created_at')[:3]
+            .order_by('-created_at')
+            .values_list('pk', flat=True)[:3]
         ),
+    )
+    recent_paid_job_ids = _cache_get_or_set(
+        'home:recent_paid_jobs:v1',
+        cache_ttl,
+        lambda: list(
+            FreelanceJob.objects.filter(status='open')
+            .order_by('-created_at')
+            .values_list('pk', flat=True)[:3]
+        ),
+    )
+
+    recent_requests = _ordered_by_ids(
+        HelpRequest.objects.select_related('skill_needed').prefetch_related('tags'),
+        recent_request_ids,
+    )
+    recent_paid_jobs = _ordered_by_ids(
+        FreelanceJob.objects.select_related('client', 'skill_needed').prefetch_related('tags'),
+        recent_paid_job_ids,
+    )
+
+    context = {
+        **stats,
+        'recent_requests': recent_requests,
+        'recent_paid_jobs': recent_paid_jobs,
     }
     return render(request, 'marketplace/home.html', context)
 
 
 def _search_querysets(query):
-    """Return grouped request/user/skill search querysets for a single free-text query."""
+    """Return grouped request/user/skill search querysets with full-text ranking."""
     normalized_query = query.strip()
     if not normalized_query:
         return HelpRequest.objects.none(), CustomUser.objects.none(), Skill.objects.none()
 
-    request_results = (
-        HelpRequest.objects.select_related('user', 'accepted_by', 'skill_needed')
-        .prefetch_related('tags')
-        .filter(
-            Q(title__icontains=normalized_query)
-            | Q(description__icontains=normalized_query)
-            | Q(tags__name__icontains=normalized_query)
-            | Q(skill_needed__name__icontains=normalized_query)
-            | Q(user__username__icontains=normalized_query)
-            | Q(accepted_by__username__icontains=normalized_query)
+    use_fts = _is_postgres_backend()
+
+    if use_fts:
+        from django.contrib.postgres.search import SearchQuery, SearchRank, SearchVector
+
+        search_query = SearchQuery(normalized_query, search_type='websearch')
+        request_vector = SearchVector('title', weight='A') + SearchVector('description', weight='B')
+        request_results = (
+            HelpRequest.objects.select_related('user', 'accepted_by', 'skill_needed')
+            .prefetch_related('tags')
+            .annotate(rank=SearchRank(request_vector, search_query))
+            .filter(
+                Q(rank__gte=0.01)
+                | Q(tags__name__icontains=normalized_query)
+                | Q(skill_needed__name__icontains=normalized_query)
+            )
+            .distinct()
+            .order_by('-rank', '-created_at')
         )
-        .distinct()
-        .order_by('-created_at')
-    )
+    else:
+        request_results = (
+            HelpRequest.objects.select_related('user', 'accepted_by', 'skill_needed')
+            .prefetch_related('tags')
+            .filter(
+                Q(title__icontains=normalized_query)
+                | Q(description__icontains=normalized_query)
+                | Q(tags__name__icontains=normalized_query)
+                | Q(skill_needed__name__icontains=normalized_query)
+                | Q(user__username__icontains=normalized_query)
+                | Q(accepted_by__username__icontains=normalized_query)
+            )
+            .distinct()
+            .order_by('-created_at')
+        )
 
     user_results = (
         annotate_user_metrics(CustomUser.objects.prefetch_related('skills'))
@@ -89,21 +181,33 @@ def _search_querysets(query):
     return request_results, user_results, skill_results
 
 
+def _is_postgres_backend():
+    """Check if the default database is PostgreSQL."""
+    from django.conf import settings as django_settings
+    engine = django_settings.DATABASES.get('default', {}).get('ENGINE', '')
+    return 'postgresql' in engine or 'postgis' in engine
+
+
 def unified_search(request):
     """Search requests, users, and skills together and render grouped discovery results."""
     query = request.GET.get('q', '').strip()
     request_results, user_results, skill_results = _search_querysets(query)
-    has_results = request_results.exists() or user_results.exists() or skill_results.exists()
+
+    # Fetch sliced results once; derive counts and has_results from materialized lists
+    request_list = list(request_results[:20]) if query else []
+    user_list = list(user_results[:20]) if query else []
+    skill_list = list(skill_results[:20]) if query else []
+    has_results = bool(request_list or user_list or skill_list)
 
     context = {
         'query': query,
-        'request_results': request_results[:20],
-        'user_results': user_results[:20],
-        'skill_results': skill_results[:20],
-        'request_count': request_results.count() if query else 0,
-        'user_count': user_results.count() if query else 0,
-        'skill_count': skill_results.count() if query else 0,
-        'has_results': has_results if query else False,
+        'request_results': request_list,
+        'user_results': user_list,
+        'skill_results': skill_list,
+        'request_count': len(request_list),
+        'user_count': len(user_list),
+        'skill_count': len(skill_list),
+        'has_results': has_results,
     }
     return render(request, 'marketplace/search_results.html', context)
 
@@ -146,7 +250,10 @@ def request_list(request):
     base_queryset = (
         HelpRequest.objects.select_related('skill_needed', 'user', 'accepted_by')
         .prefetch_related('tags')
-        .annotate(skill_user_count=Count('skill_needed__users', distinct=True))
+        .annotate(
+            skill_user_count=Count('skill_needed__users', distinct=True),
+            proposal_count=Count('proposals', filter=Q(proposals__status='pending'), distinct=True),
+        )
     )
 
     query = ''
@@ -622,7 +729,7 @@ def delete_request(request, pk):
 def request_detail(request, pk):
     """Display a request, rating state, and discussion with private-comment rules."""
     help_req = get_object_or_404(
-        HelpRequest.objects.select_related('user', 'accepted_by', 'skill_needed').prefetch_related('tags'),
+        HelpRequest.objects.select_related('user', 'accepted_by', 'skill_needed').prefetch_related('tags', 'proposals__applicant'),
         pk=pk,
     )
 
@@ -648,9 +755,30 @@ def request_detail(request, pk):
                 comment.is_private = False
 
             comment.save()
+            for participant in [help_req.user, help_req.accepted_by]:
+                if participant and participant != request.user:
+                    _notify_user(
+                        participant,
+                        f'New comment on "{help_req.title}".',
+                        reverse('request_detail', args=[help_req.pk]),
+                    )
             return redirect('request_detail', pk=pk)
     else:
         form = CommentForm()
+
+    request_ct = ContentType.objects.get_for_model(HelpRequest)
+    comment_ct = ContentType.objects.get_for_model(Comment)
+    request_attachments = Attachment.objects.filter(
+        content_type=request_ct,
+        object_id=help_req.pk,
+    ).select_related('uploaded_by')
+    comment_attachment_map = defaultdict(list)
+    comment_attachments = Attachment.objects.filter(
+        content_type=comment_ct,
+        object_id__in=list(comments.values_list('pk', flat=True)),
+    ).select_related('uploaded_by')
+    for attachment in comment_attachments:
+        comment_attachment_map[attachment.object_id].append(attachment)
 
     existing_rating = getattr(help_req, 'rating', None)
     can_rate = (
@@ -661,8 +789,35 @@ def request_detail(request, pk):
         and existing_rating is None
     )
 
-    can_edit = request.user.is_authenticated and request.user == help_req.user and help_req.status == 'open'
-    can_delete = request.user.is_authenticated and request.user == help_req.user and help_req.status in ['open', 'canceled']
+    is_poster = request.user.is_authenticated and request.user == help_req.user
+    can_edit = is_poster and help_req.status == 'open'
+    can_delete = is_poster and help_req.status in ['open', 'canceled']
+    can_submit_proposal = request.user.is_authenticated and request.user != help_req.user and help_req.status == 'open'
+    pending_proposals_count = help_req.proposals.filter(status='pending').count() if help_req.status == 'open' else 0
+    can_quick_claim = (
+        request.user.is_authenticated
+        and request.user != help_req.user
+        and help_req.status == 'open'
+        and pending_proposals_count == 0
+    )
+
+    user_proposal = None
+    proposal_form = None
+    visible_proposals = HelpRequestProposal.objects.none()
+    if request.user.is_authenticated:
+        user_proposal = help_req.proposals.filter(applicant=request.user).first()
+        proposal_form = HelpRequestProposalForm(
+            request_obj=help_req,
+            initial={
+                'proposed_kp': user_proposal.proposed_kp if user_proposal else help_req.kp_bounty,
+                'eta_days': user_proposal.eta_days if user_proposal else '',
+                'cover_note': user_proposal.cover_note if user_proposal else '',
+            },
+        )
+        if is_poster:
+            visible_proposals = help_req.proposals.select_related('applicant').order_by('-created_at')
+        elif user_proposal:
+            visible_proposals = help_req.proposals.filter(pk=user_proposal.pk).select_related('applicant')
 
     return render(
         request,
@@ -676,6 +831,17 @@ def request_detail(request, pk):
             'existing_rating': existing_rating,
             'can_edit': can_edit,
             'can_delete': can_delete,
+            'can_submit_proposal': can_submit_proposal,
+            'proposal_form': proposal_form,
+            'user_proposal': user_proposal,
+            'proposals': visible_proposals,
+            'can_manage_proposals': is_poster and help_req.status == 'open',
+            'pending_proposals_count': pending_proposals_count,
+            'can_quick_claim': can_quick_claim,
+            'request_lifecycle_steps': _request_lifecycle_steps(help_req),
+            'request_attachments': request_attachments,
+            'comment_attachment_map': comment_attachment_map,
+            'attachment_form': AttachmentUploadForm(),
         },
     )
 
@@ -711,6 +877,136 @@ def rate_request(request, pk):
         score=form.cleaned_data['score'],
     )
     messages.success(request, 'Thanks! Your rating has been submitted.')
+    return redirect('request_detail', pk=pk)
+
+
+@login_required
+@csrf_protect
+@require_POST
+@ratelimit(key='ip', rate='20/m', block=True)
+def submit_request_proposal(request, pk):
+    """Submit or update a helper proposal for an open request."""
+    help_req = get_object_or_404(HelpRequest.objects.select_related('user'), pk=pk)
+    if help_req.user_id == request.user.pk:
+        messages.error(request, 'You cannot submit a proposal to your own request.')
+        return redirect('request_detail', pk=pk)
+    if help_req.status != 'open':
+        messages.error(request, 'Proposals are allowed only while the request is open.')
+        return redirect('request_detail', pk=pk)
+
+    form = HelpRequestProposalForm(request.POST, request_obj=help_req)
+    if not form.is_valid():
+        messages.error(request, form.errors.as_text())
+        return redirect('request_detail', pk=pk)
+
+    with transaction.atomic():
+        proposal, _ = HelpRequestProposal.objects.update_or_create(
+            request=help_req,
+            applicant=request.user,
+            defaults={
+                'proposed_kp': form.cleaned_data['proposed_kp'],
+                'eta_days': form.cleaned_data.get('eta_days'),
+                'cover_note': form.cleaned_data.get('cover_note', ''),
+                'status': 'pending',
+                'selected_at': None,
+            },
+        )
+    _notify_user(
+        help_req.user,
+        f'New proposal on "{help_req.title}" from {request.user.username}.',
+        reverse('request_detail', args=[help_req.pk]),
+    )
+    dispatch_webhook_event(
+        help_req.user,
+        'request.proposal_submitted',
+        {
+            'request_id': help_req.pk,
+            'proposal_id': proposal.pk,
+            'applicant': request.user.username,
+            'proposed_kp': proposal.proposed_kp,
+            'eta_days': proposal.eta_days,
+        },
+    )
+    messages.success(request, 'Proposal submitted successfully.')
+    return redirect('request_detail', pk=pk)
+
+
+@login_required
+@csrf_protect
+@require_POST
+def select_request_proposal(request, pk, proposal_id):
+    """Allow the request poster to select one helper proposal and start work."""
+    with transaction.atomic():
+        help_req = get_object_or_404(
+            HelpRequest.objects.select_for_update().select_related('user'),
+            pk=pk,
+        )
+        if help_req.user_id != request.user.pk:
+            messages.error(request, 'Only the request poster can select a proposal.')
+            return redirect('request_detail', pk=pk)
+        if help_req.status != 'open':
+            messages.error(request, 'This request is no longer open for proposal selection.')
+            return redirect('request_detail', pk=pk)
+
+        proposal = get_object_or_404(
+            HelpRequestProposal.objects.select_for_update().select_related('applicant'),
+            pk=proposal_id,
+            request=help_req,
+        )
+        if proposal.status != 'pending':
+            messages.error(request, 'Only pending proposals can be selected.')
+            return redirect('request_detail', pk=pk)
+
+        selected_kp = proposal.proposed_kp
+        if selected_kp < help_req.kp_bounty:
+            refund = help_req.kp_bounty - selected_kp
+            poster = CustomUser.objects.select_for_update().get(pk=request.user.pk)
+            poster.knowledge_points += refund
+            poster.save(update_fields=['knowledge_points'])
+            help_req.kp_bounty = selected_kp
+
+        help_req.status = 'in_progress'
+        help_req.accepted_by = proposal.applicant
+        help_req.save(update_fields=['status', 'accepted_by', 'kp_bounty', 'updated_at'])
+
+        proposal.status = 'selected'
+        proposal.selected_at = timezone.now()
+        proposal.save(update_fields=['status', 'selected_at', 'updated_at'])
+        HelpRequestProposal.objects.filter(request=help_req, status='pending').exclude(pk=proposal.pk).update(status='rejected')
+
+        _notify_user(
+            proposal.applicant,
+            f'Your proposal was selected for "{help_req.title}".',
+            reverse('request_detail', args=[help_req.pk]),
+        )
+        dispatch_webhook_event(
+            help_req.user,
+            'request.status_changed',
+            {
+                'request_id': help_req.pk,
+                'status': help_req.status,
+                'accepted_by': proposal.applicant.username,
+                'selected_proposal_id': proposal.pk,
+            },
+        )
+
+    messages.success(request, f'You selected {proposal.applicant.username} for this request.')
+    return redirect('request_detail', pk=pk)
+
+
+@login_required
+@csrf_protect
+@require_POST
+def withdraw_request_proposal(request, pk):
+    """Allow an applicant to withdraw their own pending request proposal."""
+    help_req = get_object_or_404(HelpRequest, pk=pk)
+    proposal = get_object_or_404(HelpRequestProposal, request=help_req, applicant=request.user)
+    if proposal.status != 'pending':
+        messages.error(request, 'Only pending proposals can be withdrawn.')
+        return redirect('request_detail', pk=pk)
+    proposal.status = 'withdrawn'
+    proposal.save(update_fields=['status', 'updated_at'])
+    messages.success(request, 'Proposal withdrawn.')
     return redirect('request_detail', pk=pk)
 
 
@@ -828,12 +1124,734 @@ def cancel_request(request, pk):
         help_req.status = 'canceled'
         help_req.save(update_fields=['status', 'updated_at'])
 
-        messages.success(
-            request,
-            f"Request '{help_req.title}' has been canceled. {help_req.kp_bounty} KP refunded.",
-        )
+    messages.success(
+        request,
+        f"Request '{help_req.title}' has been canceled. {help_req.kp_bounty} KP refunded.",
+    )
 
     return redirect('request_detail', pk=pk)
+
+
+def freelance_job_list(request):
+    """List paid freelance jobs with optional status, skill, and query filters."""
+    all_jobs = (
+        FreelanceJob.objects.select_related('client', 'freelancer', 'skill_needed')
+        .prefetch_related('tags', 'milestones')
+        .annotate(pending_proposals_count=Count('proposals', filter=Q(proposals__status='pending'), distinct=True))
+        .order_by('-created_at')
+    )
+    query = (request.GET.get('q') or '').strip()
+    status_filter = (request.GET.get('status') or '').strip()
+    skill_filter = (request.GET.get('skill') or '').strip()
+
+    if query:
+        all_jobs = all_jobs.filter(Q(title__icontains=query) | Q(description__icontains=query))
+    if status_filter in {'open', 'in_progress', 'completed', 'canceled', 'disputed'}:
+        all_jobs = all_jobs.filter(status=status_filter)
+    if skill_filter.isdigit():
+        all_jobs = all_jobs.filter(skill_needed_id=int(skill_filter))
+
+    paginator = Paginator(all_jobs, 10)
+    page_obj = paginator.get_page(request.GET.get('page'))
+    context = {
+        'jobs': page_obj,
+        'page_obj': page_obj,
+        'skills': Skill.objects.order_by('name'),
+        'query': query,
+        'status_filter': status_filter,
+        'skill_filter': skill_filter,
+    }
+    return render(request, 'marketplace/job_list.html', context)
+
+
+@login_required
+@csrf_protect
+@ratelimit(key='ip', rate='6/m', block=True)
+def post_freelance_job(request):
+    """Create a paid freelance job and move budget into INR escrow."""
+    if request.method == 'POST':
+        form = FreelanceJobForm(request.POST)
+        if form.is_valid():
+            with transaction.atomic():
+                client = CustomUser.objects.select_for_update().get(pk=request.user.pk)
+                budget = form.cleaned_data['budget_inr']
+                if client.wallet_inr < budget:
+                    form.add_error('budget_inr', 'Insufficient INR wallet balance for escrow.')
+                    return render(request, 'marketplace/job_create.html', {'form': form})
+
+                client.wallet_inr -= budget
+                client.save(update_fields=['wallet_inr'])
+
+                job = form.save(commit=False)
+                job.client = client
+                job.escrow_inr = budget
+                job.save()
+                form.save_tags(job)
+
+                JobMilestone.objects.create(
+                    job=job,
+                    title='Final delivery',
+                    amount_inr=budget,
+                    sequence=1,
+                )
+                _record_wallet_entry(
+                    user=client,
+                    direction='debit',
+                    amount_inr=budget,
+                    source_type='job_escrow',
+                    reference_id=job.pk,
+                    description=f'Escrow funded for freelance job #{job.pk}',
+                )
+            messages.success(request, 'Freelance job posted with INR escrow funded.')
+            return redirect('freelance_job_detail', pk=job.pk)
+    else:
+        form = FreelanceJobForm()
+
+    return render(request, 'marketplace/job_create.html', {'form': form})
+
+
+def freelance_job_detail(request, pk):
+    """Show paid job details, milestones, and participant actions."""
+    job = get_object_or_404(
+        FreelanceJob.objects.select_related('client', 'freelancer', 'skill_needed').prefetch_related(
+            'tags',
+            'milestones',
+            'disputes',
+            'proposals__applicant',
+            'proposals__milestones',
+        ),
+        pk=pk,
+    )
+    can_claim = request.user.is_authenticated and job.status == 'open' and request.user != job.client
+    can_manage = request.user.is_authenticated and request.user == job.client
+    can_work = request.user.is_authenticated and request.user == job.freelancer and job.status == 'in_progress'
+    can_dispute = request.user.is_authenticated and request.user in [job.client, job.freelancer]
+    can_cancel = can_manage and job.status in {'open', 'in_progress', 'disputed'}
+    can_add_milestone = can_manage and job.status in {'open', 'in_progress'}
+    can_open_dispute = can_dispute and job.status in {'in_progress', 'disputed'}
+    can_submit_job_proposal = request.user.is_authenticated and request.user != job.client and job.status == 'open'
+    pending_job_proposals_count = job.proposals.filter(status='pending').count() if job.status == 'open' else 0
+    can_quick_accept = can_claim and pending_job_proposals_count == 0
+
+    user_job_proposal = None
+    job_proposal_form = None
+    visible_job_proposals = FreelanceJobProposal.objects.none()
+    if request.user.is_authenticated:
+        user_job_proposal = job.proposals.filter(applicant=request.user).first()
+        job_proposal_form = FreelanceJobProposalForm(
+            job_obj=job,
+            initial={
+                'proposed_total_inr': user_job_proposal.proposed_total_inr if user_job_proposal else job.budget_inr,
+                'eta_days': user_job_proposal.eta_days if user_job_proposal else '',
+                'cover_note': user_job_proposal.cover_note if user_job_proposal else '',
+            },
+        )
+        if can_manage:
+            visible_job_proposals = job.proposals.select_related('applicant').prefetch_related('milestones').order_by('-created_at')
+        elif user_job_proposal:
+            visible_job_proposals = job.proposals.filter(pk=user_job_proposal.pk).select_related('applicant').prefetch_related('milestones')
+
+    job_ct = ContentType.objects.get_for_model(FreelanceJob)
+    job_attachments = Attachment.objects.filter(content_type=job_ct, object_id=job.pk).select_related('uploaded_by')
+    deliverables = MilestoneDeliverable.objects.filter(milestone__job=job).select_related('submitted_by', 'milestone')
+    deliverables_by_milestone = {deliverable.milestone_id: deliverable for deliverable in deliverables}
+
+    context = {
+        'job': job,
+        'can_claim': can_claim,
+        'can_manage': can_manage,
+        'can_work': can_work,
+        'can_dispute': can_dispute,
+        'can_cancel': can_cancel,
+        'can_add_milestone': can_add_milestone,
+        'can_open_dispute': can_open_dispute,
+        'milestone_form': JobMilestoneForm(),
+        'dispute_form': JobDisputeForm(),
+        'can_submit_job_proposal': can_submit_job_proposal,
+        'job_proposal_form': job_proposal_form,
+        'user_job_proposal': user_job_proposal,
+        'job_proposals': visible_job_proposals,
+        'can_manage_job_proposals': can_manage and job.status == 'open',
+        'pending_job_proposals_count': pending_job_proposals_count,
+        'can_quick_accept': can_quick_accept,
+        'job_lifecycle_steps': _job_lifecycle_steps(job),
+        'deliverable_form': DeliverableSubmissionForm(),
+        'revision_form': DeliverableRevisionForm(),
+        'deliverables_by_milestone': deliverables_by_milestone,
+        'job_attachments': job_attachments,
+        'attachment_form': AttachmentUploadForm(),
+    }
+    return render(request, 'marketplace/job_detail.html', context)
+
+
+@login_required
+@csrf_protect
+@require_POST
+@ratelimit(key='ip', rate='20/m', block=True)
+def submit_job_proposal(request, pk):
+    """Submit or update a freelancer proposal for an open paid job."""
+    job = get_object_or_404(FreelanceJob.objects.select_related('client'), pk=pk)
+    if job.client_id == request.user.pk:
+        messages.error(request, 'You cannot submit a proposal to your own job.')
+        return redirect('freelance_job_detail', pk=pk)
+    if job.status != 'open':
+        messages.error(request, 'Proposals are allowed only while the job is open.')
+        return redirect('freelance_job_detail', pk=pk)
+
+    form = FreelanceJobProposalForm(request.POST, job_obj=job)
+    if not form.is_valid():
+        messages.error(request, form.errors.as_text())
+        return redirect('freelance_job_detail', pk=pk)
+
+    with transaction.atomic():
+        locked_job = FreelanceJob.objects.select_for_update().get(pk=job.pk)
+        proposal, _ = FreelanceJobProposal.objects.update_or_create(
+            job=locked_job,
+            applicant=request.user,
+            defaults={
+                'proposed_total_inr': form.cleaned_data['proposed_total_inr'],
+                'eta_days': form.cleaned_data.get('eta_days'),
+                'cover_note': form.cleaned_data.get('cover_note', ''),
+                'status': 'pending',
+                'selected_at': None,
+            },
+        )
+        form.save_milestones(proposal)
+        if locked_job.first_response_at is None:
+            locked_job.first_response_at = timezone.now()
+            locked_job.save(update_fields=['first_response_at', 'updated_at'])
+
+    _notify_user(
+        job.client,
+        f'New proposal on "{job.title}" from {request.user.username}.',
+        reverse('freelance_job_detail', args=[job.pk]),
+    )
+    dispatch_webhook_event(
+        job.client,
+        'job.proposal_submitted',
+        {
+            'job_id': job.pk,
+            'proposal_id': proposal.pk,
+            'applicant': request.user.username,
+            'proposed_total_inr': str(proposal.proposed_total_inr),
+            'eta_days': proposal.eta_days,
+        },
+    )
+    messages.success(request, 'Job proposal submitted successfully.')
+    return redirect('freelance_job_detail', pk=pk)
+
+
+@login_required
+@csrf_protect
+@require_POST
+def select_job_proposal(request, pk, proposal_id):
+    """Allow the client to select a freelancer proposal and activate the job."""
+    with transaction.atomic():
+        job = get_object_or_404(
+            FreelanceJob.objects.select_for_update().select_related('client'),
+            pk=pk,
+        )
+        if job.client_id != request.user.pk:
+            messages.error(request, 'Only the client can select a proposal.')
+            return redirect('freelance_job_detail', pk=pk)
+        if job.status != 'open':
+            messages.error(request, 'This job is no longer open for proposal selection.')
+            return redirect('freelance_job_detail', pk=pk)
+
+        proposal = get_object_or_404(
+            FreelanceJobProposal.objects.select_for_update().select_related('applicant').prefetch_related('milestones'),
+            pk=proposal_id,
+            job=job,
+        )
+        if proposal.status != 'pending':
+            messages.error(request, 'Only pending proposals can be selected.')
+            return redirect('freelance_job_detail', pk=pk)
+
+        proposed_total = proposal.proposed_total_inr
+        if proposed_total < job.escrow_inr:
+            refund_amount = job.escrow_inr - proposed_total
+            client = CustomUser.objects.select_for_update().get(pk=job.client_id)
+            client.wallet_inr += refund_amount
+            client.save(update_fields=['wallet_inr'])
+            _record_wallet_entry(
+                user=client,
+                direction='credit',
+                amount_inr=refund_amount,
+                source_type='job_bid_refund',
+                reference_id=job.pk,
+                description=f'Escrow adjustment after selecting proposal #{proposal.pk}',
+            )
+            job.escrow_inr = proposed_total
+
+        job.budget_inr = proposed_total
+        job.freelancer = proposal.applicant
+        job.status = 'in_progress'
+        if job.first_response_at is None:
+            job.first_response_at = timezone.now()
+            job.save(update_fields=['budget_inr', 'escrow_inr', 'freelancer', 'status', 'first_response_at', 'updated_at'])
+        else:
+            job.save(update_fields=['budget_inr', 'escrow_inr', 'freelancer', 'status', 'updated_at'])
+
+        job.milestones.all().delete()
+        proposal_milestones = list(proposal.milestones.all().order_by('sequence'))
+        if proposal_milestones:
+            for milestone in proposal_milestones:
+                JobMilestone.objects.create(
+                    job=job,
+                    title=milestone.title,
+                    amount_inr=milestone.amount_inr,
+                    sequence=milestone.sequence,
+                )
+        else:
+            JobMilestone.objects.create(
+                job=job,
+                title='Final delivery',
+                amount_inr=proposed_total,
+                sequence=1,
+            )
+
+        proposal.status = 'selected'
+        proposal.selected_at = timezone.now()
+        proposal.save(update_fields=['status', 'selected_at', 'updated_at'])
+        FreelanceJobProposal.objects.filter(job=job, status='pending').exclude(pk=proposal.pk).update(status='rejected')
+
+        _notify_user(
+            proposal.applicant,
+            f'Your proposal was selected for "{job.title}".',
+            reverse('freelance_job_detail', args=[job.pk]),
+        )
+        _notify_user(
+            job.client,
+            f'You selected {proposal.applicant.username} for "{job.title}".',
+            reverse('freelance_job_detail', args=[job.pk]),
+        )
+        dispatch_webhook_event(
+            job.client,
+            'job.status_changed',
+            {
+                'job_id': job.pk,
+                'status': job.status,
+                'freelancer': proposal.applicant.username,
+                'selected_proposal_id': proposal.pk,
+            },
+        )
+
+    messages.success(request, f'You selected {proposal.applicant.username} for this job.')
+    return redirect('freelance_job_detail', pk=pk)
+
+
+@login_required
+@csrf_protect
+@require_POST
+def withdraw_job_proposal(request, pk):
+    """Allow a freelancer to withdraw their own pending job proposal."""
+    job = get_object_or_404(FreelanceJob, pk=pk)
+    proposal = get_object_or_404(FreelanceJobProposal, job=job, applicant=request.user)
+    if proposal.status != 'pending':
+        messages.error(request, 'Only pending proposals can be withdrawn.')
+        return redirect('freelance_job_detail', pk=pk)
+    proposal.status = 'withdrawn'
+    proposal.save(update_fields=['status', 'updated_at'])
+    messages.success(request, 'Proposal withdrawn.')
+    return redirect('freelance_job_detail', pk=pk)
+
+
+@login_required
+@csrf_protect
+@require_POST
+@ratelimit(key='ip', rate='20/m', block=True)
+def claim_freelance_job(request, pk):
+    """Allow a freelancer to claim an open paid job."""
+    with transaction.atomic():
+        job = get_object_or_404(FreelanceJob.objects.select_for_update().select_related('client'), pk=pk)
+        if job.client_id == request.user.pk:
+            messages.error(request, 'You cannot claim your own freelance job.')
+            return redirect('freelance_job_detail', pk=pk)
+        if job.status != 'open':
+            messages.error(request, 'This job is no longer open.')
+            return redirect('freelance_job_detail', pk=pk)
+
+        job.freelancer = request.user
+        job.status = 'in_progress'
+        if job.first_response_at is None:
+            job.first_response_at = timezone.now()
+            job.save(update_fields=['freelancer', 'status', 'first_response_at', 'updated_at'])
+        else:
+            job.save(update_fields=['freelancer', 'status', 'updated_at'])
+
+        _notify_user(job.client, 'A freelancer accepted your paid job.', reverse('freelance_job_detail', args=[job.pk]))
+        dispatch_webhook_event(
+            job.client,
+            'job.status_changed',
+            {
+                'job_id': job.pk,
+                'status': job.status,
+                'freelancer': request.user.username,
+            },
+        )
+        messages.success(request, 'You accepted this freelance job.')
+    return redirect('freelance_job_detail', pk=pk)
+
+
+@login_required
+@csrf_protect
+@require_POST
+def add_job_milestone(request, pk):
+    """Add a milestone to a paid job (client only)."""
+    job = get_object_or_404(FreelanceJob.objects.select_related('client'), pk=pk)
+    if request.user != job.client:
+        messages.error(request, 'Only the client can add milestones.')
+        return redirect('freelance_job_detail', pk=pk)
+    if job.status not in {'open', 'in_progress'}:
+        messages.error(request, 'Milestones can only be added while a job is active.')
+        return redirect('freelance_job_detail', pk=pk)
+
+    form = JobMilestoneForm(request.POST)
+    if not form.is_valid():
+        messages.error(request, 'Provide a valid milestone title and amount.')
+        return redirect('freelance_job_detail', pk=pk)
+
+    with transaction.atomic():
+        locked_job = get_object_or_404(FreelanceJob.objects.select_for_update(), pk=pk)
+        next_sequence = (locked_job.milestones.aggregate(max_seq=Coalesce(Max('sequence'), 0))['max_seq'] or 0) + 1
+        milestone = form.save(commit=False)
+        milestone.job = locked_job
+        milestone.sequence = next_sequence
+        milestone.full_clean()
+        milestone.save()
+    messages.success(request, 'Milestone added.')
+    return redirect('freelance_job_detail', pk=pk)
+
+
+@login_required
+@csrf_protect
+@require_POST
+def submit_job_milestone(request, pk, milestone_id):
+    """Allow assigned freelancer to mark a milestone as submitted."""
+    with transaction.atomic():
+        job = get_object_or_404(FreelanceJob.objects.select_for_update().select_related('freelancer', 'client'), pk=pk)
+        milestone = get_object_or_404(JobMilestone.objects.select_for_update(), pk=milestone_id, job=job)
+        if request.user != job.freelancer:
+            messages.error(request, 'Only the assigned freelancer can submit milestones.')
+            return redirect('freelance_job_detail', pk=pk)
+        if job.status != 'in_progress':
+            messages.error(request, 'Milestones can only be submitted while job is in progress.')
+            return redirect('freelance_job_detail', pk=pk)
+        if milestone.status != 'pending':
+            messages.error(request, 'This milestone is not in pending state.')
+            return redirect('freelance_job_detail', pk=pk)
+
+        milestone.status = 'submitted'
+        milestone.submitted_at = timezone.now()
+        milestone.save(update_fields=['status', 'submitted_at'])
+        _notify_user(job.client, f'Milestone "{milestone.title}" was submitted for review.', reverse('freelance_job_detail', args=[job.pk]))
+    messages.success(request, 'Milestone submitted for client review.')
+    return redirect('freelance_job_detail', pk=pk)
+
+
+@login_required
+@csrf_protect
+@require_POST
+def release_job_milestone(request, pk, milestone_id):
+    """Release submitted milestone escrow to freelancer (client only)."""
+    with transaction.atomic():
+        job = get_object_or_404(FreelanceJob.objects.select_for_update().select_related('client', 'freelancer'), pk=pk)
+        milestone = get_object_or_404(JobMilestone.objects.select_for_update(), pk=milestone_id, job=job)
+
+        if request.user != job.client:
+            messages.error(request, 'Only the client can release milestone payments.')
+            return redirect('freelance_job_detail', pk=pk)
+        if not job.freelancer:
+            messages.error(request, 'No freelancer assigned to this job.')
+            return redirect('freelance_job_detail', pk=pk)
+        if milestone.status != 'submitted':
+            messages.error(request, 'Only submitted milestones can be released.')
+            return redirect('freelance_job_detail', pk=pk)
+        deliverable = MilestoneDeliverable.objects.filter(milestone=milestone).first()
+        if deliverable and deliverable.status != 'approved':
+            messages.error(request, 'Approve the deliverable before releasing payment.')
+            return redirect('freelance_job_detail', pk=pk)
+        if job.escrow_inr < milestone.amount_inr:
+            messages.error(request, 'Escrow is insufficient for this release.')
+            return redirect('freelance_job_detail', pk=pk)
+
+        freelancer = CustomUser.objects.select_for_update().get(pk=job.freelancer_id)
+        freelancer.wallet_inr += milestone.amount_inr
+        freelancer.save(update_fields=['wallet_inr'])
+
+        job.escrow_inr -= milestone.amount_inr
+        milestone.status = 'released'
+        milestone.released_at = timezone.now()
+        milestone.save(update_fields=['status', 'released_at'])
+
+        all_released = not job.milestones.exclude(status='released').exists()
+        if all_released:
+            job.status = 'completed'
+            TrustSignal.objects.create(
+                user=freelancer,
+                signal_type='job_completed',
+                score_delta=5,
+                detail=f'Completed freelance job #{job.pk}',
+                related_job=job,
+            )
+        TrustSignal.objects.create(
+            user=freelancer,
+            signal_type='milestone_released',
+            score_delta=2,
+            detail=f'Released milestone #{milestone.pk}',
+            related_job=job,
+        )
+        job.save(update_fields=['escrow_inr', 'status', 'updated_at'])
+        if all_released:
+            evaluate_job_collusion(job)
+
+        _record_wallet_entry(
+            user=freelancer,
+            direction='credit',
+            amount_inr=milestone.amount_inr,
+            source_type='job_milestone_release',
+            reference_id=milestone.pk,
+            description=f'Milestone release for job #{job.pk}',
+        )
+        _notify_user(freelancer, f'INR {milestone.amount_inr} released for milestone "{milestone.title}".', reverse('freelance_job_detail', args=[job.pk]))
+        dispatch_webhook_event(
+            job.client,
+            'milestone.released',
+            {
+                'job_id': job.pk,
+                'milestone_id': milestone.pk,
+                'amount_inr': str(milestone.amount_inr),
+                'freelancer': freelancer.username,
+                'job_status': job.status,
+            },
+        )
+        messages.success(request, f'Milestone released: INR {milestone.amount_inr} credited to freelancer wallet.')
+    return redirect('freelance_job_detail', pk=pk)
+
+
+@login_required
+@csrf_protect
+@require_POST
+def open_job_dispute(request, pk):
+    """Open a dispute on an in-progress paid job."""
+    job = get_object_or_404(FreelanceJob.objects.select_related('client', 'freelancer'), pk=pk)
+    if request.user not in [job.client, job.freelancer]:
+        messages.error(request, 'Only job participants can open disputes.')
+        return redirect('freelance_job_detail', pk=pk)
+    if job.status not in {'in_progress', 'disputed'}:
+        messages.error(request, 'Disputes can be opened only for active paid jobs.')
+        return redirect('freelance_job_detail', pk=pk)
+
+    form = JobDisputeForm(request.POST)
+    if not form.is_valid():
+        messages.error(request, 'Please provide a dispute reason.')
+        return redirect('freelance_job_detail', pk=pk)
+
+    with transaction.atomic():
+        locked_job = get_object_or_404(FreelanceJob.objects.select_for_update(), pk=pk)
+        dispute = form.save(commit=False)
+        dispute.job = locked_job
+        dispute.opened_by = request.user
+        dispute.against_user = locked_job.freelancer if request.user == locked_job.client else locked_job.client
+        dispute.save()
+
+        locked_job.status = 'disputed'
+        locked_job.save(update_fields=['status', 'updated_at'])
+
+        TrustSignal.objects.create(
+            user=request.user,
+            signal_type='dispute_opened',
+            score_delta=-2,
+            detail=f'Dispute opened for job #{locked_job.pk}',
+            related_job=locked_job,
+        )
+        dispatch_webhook_event(
+            locked_job.client,
+            'job.status_changed',
+            {
+                'job_id': locked_job.pk,
+                'status': locked_job.status,
+                'dispute_id': dispute.pk,
+            },
+        )
+    messages.warning(request, 'Dispute opened. Admin review can be added in the next phase.')
+    return redirect('freelance_job_detail', pk=pk)
+
+
+@login_required
+@csrf_protect
+def cancel_freelance_job(request, pk):
+    """Cancel a paid job and refund remaining escrow to the client wallet."""
+    job = get_object_or_404(FreelanceJob.objects.select_related('client'), pk=pk)
+    if request.user != job.client:
+        messages.error(request, 'Only the client can cancel this paid job.')
+        return redirect('freelance_job_detail', pk=pk)
+    if job.status not in {'open', 'in_progress', 'disputed'}:
+        messages.error(request, 'Only active paid jobs can be canceled.')
+        return redirect('freelance_job_detail', pk=pk)
+
+    if request.method == 'GET':
+        return render(request, 'marketplace/confirm_job_cancel.html', {'job': job})
+
+    with transaction.atomic():
+        locked_job = get_object_or_404(FreelanceJob.objects.select_for_update(), pk=pk)
+        client = CustomUser.objects.select_for_update().get(pk=locked_job.client_id)
+        refund_amount = locked_job.escrow_inr
+
+        if refund_amount > 0:
+            client.wallet_inr += refund_amount
+            client.save(update_fields=['wallet_inr'])
+            _record_wallet_entry(
+                user=client,
+                direction='credit',
+                amount_inr=refund_amount,
+                source_type='job_escrow_refund',
+                reference_id=locked_job.pk,
+                description=f'Escrow refund for canceled job #{locked_job.pk}',
+            )
+
+        locked_job.escrow_inr = Decimal('0.00')
+        locked_job.status = 'canceled'
+        locked_job.save(update_fields=['escrow_inr', 'status', 'updated_at'])
+        dispatch_webhook_event(
+            client,
+            'job.status_changed',
+            {
+                'job_id': locked_job.pk,
+                'status': locked_job.status,
+                'refund_amount_inr': str(refund_amount),
+            },
+        )
+    messages.success(request, 'Paid job canceled and remaining escrow refunded.')
+    return redirect('freelance_job_detail', pk=pk)
+
+
+@login_required
+def export_wallet_ledger_csv(request):
+    """Export authenticated user's wallet ledger history as CSV."""
+    response = HttpResponse(content_type='text/csv')
+    response['Content-Disposition'] = 'attachment; filename="wallet_ledger.csv"'
+
+    writer = csv.writer(response)
+    writer.writerow(['date_utc', 'direction', 'amount_inr', 'source_type', 'reference_id', 'description'])
+
+    for entry in request.user.wallet_entries.order_by('-created_at'):
+        writer.writerow(
+            [
+                entry.created_at.strftime('%Y-%m-%d %H:%M:%S'),
+                entry.direction,
+                entry.amount_inr,
+                entry.source_type,
+                entry.reference_id or '',
+                entry.description or '',
+            ]
+        )
+    return response
+
+
+@login_required
+def export_job_disputes_csv(request):
+    """Export disputes related to the authenticated user as CSV."""
+    disputes = (
+        JobDispute.objects.select_related('job', 'opened_by', 'against_user')
+        .filter(Q(job__client=request.user) | Q(job__freelancer=request.user) | Q(opened_by=request.user))
+        .distinct()
+        .order_by('-created_at')
+    )
+
+    response = HttpResponse(content_type='text/csv')
+    response['Content-Disposition'] = 'attachment; filename="job_disputes.csv"'
+
+    writer = csv.writer(response)
+    writer.writerow(
+        [
+            'dispute_id',
+            'job_id',
+            'job_title',
+            'status',
+            'resolution_type',
+            'refund_amount_inr',
+            'payout_amount_inr',
+            'opened_by',
+            'against_user',
+            'created_at_utc',
+            'resolved_at_utc',
+            'reason',
+        ]
+    )
+
+    for dispute in disputes:
+        writer.writerow(
+            [
+                dispute.pk,
+                dispute.job_id,
+                dispute.job.title,
+                dispute.status,
+                dispute.resolution_type,
+                dispute.refund_amount_inr,
+                dispute.payout_amount_inr,
+                dispute.opened_by.username if dispute.opened_by else '',
+                dispute.against_user.username if dispute.against_user else '',
+                dispute.created_at.strftime('%Y-%m-%d %H:%M:%S'),
+                dispute.resolved_at.strftime('%Y-%m-%d %H:%M:%S') if dispute.resolved_at else '',
+                dispute.reason,
+            ]
+        )
+    return response
+
+
+@login_required
+@csrf_protect
+def wallet_overview(request):
+    """Display INR wallet activity and handle payout requests."""
+    if request.method == 'POST':
+        form = PayoutRequestForm(request.POST)
+        if form.is_valid():
+            with transaction.atomic():
+                user = CustomUser.objects.select_for_update().get(pk=request.user.pk)
+                amount = form.cleaned_data['amount_inr']
+
+                if not user.compliance_verified:
+                    messages.error(request, 'Complete compliance verification before requesting payouts.')
+                    return redirect('wallet_overview')
+                if user.wallet_inr < amount:
+                    messages.error(request, 'Insufficient wallet balance for this payout request.')
+                    return redirect('wallet_overview')
+
+                if user.payout_requests.filter(status='pending').count() >= 3:
+                    TrustSignal.objects.create(
+                        user=user,
+                        signal_type='fraud_flag',
+                        score_delta=-2,
+                        detail='High number of pending payout requests.',
+                    )
+
+                user.wallet_inr -= amount
+                user.save(update_fields=['wallet_inr'])
+                payout = PayoutRequest.objects.create(
+                    user=user,
+                    amount_inr=amount,
+                    note=form.cleaned_data.get('note', ''),
+                )
+                _record_wallet_entry(
+                    user=user,
+                    direction='debit',
+                    amount_inr=amount,
+                    source_type='payout_request',
+                    reference_id=payout.pk,
+                    description='Payout request submitted',
+                )
+            messages.success(request, 'Payout request submitted successfully.')
+            return redirect('wallet_overview')
+    else:
+        form = PayoutRequestForm()
+
+    context = {
+        'wallet_entries': request.user.wallet_entries.all()[:30],
+        'payout_requests': request.user.payout_requests.all()[:20],
+        'form': form,
+    }
+    return render(request, 'marketplace/wallet.html', context)
 
 
 class HelpRequestFilter(django_filters.FilterSet):
@@ -872,6 +1890,31 @@ class HelpRequestViewSet(viewsets.ReadOnlyModelViewSet):
 
         serializer = PublicCommentSerializer(comments_qs, many=True)
         return Response(serializer.data)
+
+
+class FreelanceJobFilter(django_filters.FilterSet):
+    """Allow API filtering of paid jobs by status and skill id."""
+
+    status = django_filters.CharFilter(field_name='status')
+    skill = django_filters.NumberFilter(field_name='skill_needed_id')
+    payment_type = django_filters.CharFilter(field_name='payment_type')
+
+    class Meta:
+        model = FreelanceJob
+        fields = ['status', 'skill', 'payment_type']
+
+
+class FreelanceJobViewSet(viewsets.ReadOnlyModelViewSet):
+    """Browsable API endpoint for listing/retrieving paid freelance jobs with milestones."""
+
+    queryset = (
+        FreelanceJob.objects.select_related('client', 'freelancer', 'skill_needed')
+        .prefetch_related('tags', 'milestones')
+        .order_by('-created_at')
+    )
+    serializer_class = FreelanceJobSerializer
+    filter_backends = [DjangoFilterBackend]
+    filterset_class = FreelanceJobFilter
 
 
 class UserViewSet(mixins.ListModelMixin, viewsets.GenericViewSet):

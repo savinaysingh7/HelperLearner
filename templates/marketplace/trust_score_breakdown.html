@@ -1,0 +1,25 @@
+{% extends 'base.html' %}
+
+{% block title %}Trust Score v2{% endblock %}
+
+{% block content %}
+<section class="page-head">
+    <span class="eyebrow"><i class="bi bi-shield-check"></i>Trust Score v2</span>
+    <h1 class="h3">{{ target_user.username }}</h1>
+    <p class="text-muted mb-0">Breakdown of reliability, disputes, responsiveness, and streak.</p>
+</section>
+
+<div class="row g-3">
+    <div class="col-12 col-md-3"><div class="card metric-card h-100"><div class="card-body"><div class="metric-label">Trust Score</div><div class="metric-value">{{ metrics.trust_score_v2 }}</div></div></div></div>
+    <div class="col-12 col-md-3"><div class="card metric-card h-100"><div class="card-body"><div class="metric-label">On-time %</div><div class="metric-value">{{ metrics.on_time_rate }}</div></div></div></div>
+    <div class="col-12 col-md-3"><div class="card metric-card h-100"><div class="card-body"><div class="metric-label">Dispute %</div><div class="metric-value">{{ metrics.dispute_rate }}</div></div></div></div>
+    <div class="col-12 col-md-3"><div class="card metric-card h-100"><div class="card-body"><div class="metric-label">Current Streak</div><div class="metric-value">{{ metrics.streak }}</div></div></div></div>
+</div>
+
+<div class="card mt-3">
+    <div class="card-body">
+        <div class="small text-muted">Average response time: {{ metrics.avg_response_minutes }} minutes</div>
+        <div class="small text-muted">Completed jobs: {{ metrics.completed_count }} | Disputes: {{ metrics.dispute_count }}</div>
+    </div>
+</div>
+{% endblock %}

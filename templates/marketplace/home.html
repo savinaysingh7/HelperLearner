@@ -31,6 +31,21 @@
                         <div class="display-6 fw-bold">{{ open_requests }}</div>
                     </div>
                 </div>
+                <div class="col-6">
+                    <div class="stat-card text-center p-3 rounded-4">
+                        <div class="small text-uppercase">Open Paid Jobs</div>
+                        <div class="display-6 fw-bold">{{ open_paid_jobs }}</div>
+                    </div>
+                </div>
+            </div>
+            <div class="hero-note p-3 mt-3">
+                <div class="small fw-semibold">Why people stay active</div>
+                <ul class="mb-0 mt-2 ps-3 small">
+                    <li>Escrowed KP for fair payouts</li>
+                    <li>INR paid jobs with milestone escrow</li>
+                    <li>Private comments after claim</li>
+                    <li>Ratings, trust score, and leaderboard</li>
+                </ul>
             </div>
             <div class="hero-note p-3 mt-3">
                 <div class="small fw-semibold">Why people stay active</div>
@@ -86,4 +101,47 @@
         {% endfor %}
     </div>
 </section>
+
+<section class="mt-4">
+    <div class="d-flex flex-column flex-md-row justify-content-between align-items-md-center mb-3 gap-2">
+        <h2 class="h4 m-0">Recent Paid Jobs</h2>
+        <a href="{% url 'freelance_job_list' %}" class="btn btn-sm btn-outline-secondary">View Paid Jobs</a>
+    </div>
+    <div class="row g-3">
+        {% for job in recent_paid_jobs %}
+            <div class="col-12 col-md-6 col-xl-4">
+                <article class="card request-card h-100">
+                    <div class="card-body d-flex flex-column">
+                        <h3 class="h6">{{ job.title }}</h3>
+                        <p class="text-muted small flex-grow-1 mb-3">{{ job.description|truncatewords:18 }}</p>
+                        <div class="small text-muted mb-2"><i class="bi bi-person-circle me-1"></i>{{ job.client.username }}</div>
+                        <div class="d-flex justify-content-between align-items-center mb-2">
+                            <span class="badge badge-soft">{{ job.skill_needed|default:'General' }}</span>
+                            <span class="badge text-bg-primary">{{ job.get_payment_type_display }}</span>
+                        </div>
+                        <div class="d-flex flex-wrap gap-2 mb-2">
+                            {% for tag in job.tags.all %}
+                                <span class="badge rounded-pill badge-soft">#{{ tag.name }}</span>
+                            {% endfor %}
+                        </div>
+                        <div class="d-flex justify-content-between align-items-center">
+                            <span class="fw-semibold text-success">&#8377;{{ job.budget_inr }}</span>
+                            <a href="{% url 'freelance_job_detail' job.pk %}" class="btn btn-link ps-0">Open details <i class="bi bi-arrow-right"></i></a>
+                        </div>
+                    </div>
+                </article>
+            </div>
+        {% empty %}
+            <div class="col-12">
+                <div class="empty-state text-center">
+                    <div class="icon"><i class="bi bi-briefcase"></i></div>
+                    <h3 class="h5 mt-2">No paid jobs yet</h3>
+                    <p class="text-muted mb-3">Post your first paid freelance job with INR escrow.</p>
+                    <a href="{% url 'post_freelance_job' %}" class="btn btn-primary">Post Paid Job</a>
+                </div>
+            </div>
+        {% endfor %}
+    </div>
+</section>
 {% endblock %}
+

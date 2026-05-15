@@ -1,0 +1,36 @@
+# HelperLearner — Render.com Blueprint
+# Creates a free web service + free PostgreSQL database.
+# Usage: Connect your GitHub repo on Render → "New Blueprint" → auto-deploys.
+
+databases:
+  - name: helperlearner-db
+    plan: free
+    databaseName: helperlearner
+    user: helperlearner
+
+services:
+  - type: web
+    plan: free
+    name: helperlearner
+    runtime: python
+    buildCommand: "./build.sh"
+    startCommand: "gunicorn helperlearner_root.wsgi"
+    envVars:
+      - key: DATABASE_URL
+        fromDatabase:
+          name: helperlearner-db
+          property: connectionString
+      - key: SECRET_KEY
+        generateValue: true
+      - key: DEBUG
+        value: "False"
+      - key: ALLOWED_HOSTS
+        value: ".onrender.com"
+      - key: CELERY_TASK_ALWAYS_EAGER
+        value: "True"
+      - key: SECURE_SSL_REDIRECT
+        value: "False"
+      - key: PYTHON_VERSION
+        value: "3.12.10"
+      - key: GEMINI_API_KEY
+        sync: false

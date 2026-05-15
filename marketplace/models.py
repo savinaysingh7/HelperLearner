@@ -58,6 +58,7 @@ class HelpRequest(models.Model):
     tags = models.ManyToManyField(Tag, blank=True, related_name='helprequests')
     kp_bounty = models.IntegerField(default=10, validators=[MinValueValidator(1)])
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='open')
+    ai_summary = models.CharField(max_length=255, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
     expires_at = models.DateTimeField(null=True, blank=True)
@@ -86,6 +87,50 @@ class HelpRequest(models.Model):
             models.Index(fields=['created_at']),
             models.Index(fields=['expires_at']),
             models.Index(fields=['status', 'expires_at']),
+        ]
+
+
+class HelpRequestProposal(models.Model):
+    STATUS_CHOICES = [
+        ('pending', 'Pending'),
+        ('selected', 'Selected'),
+        ('rejected', 'Rejected'),
+        ('withdrawn', 'Withdrawn'),
+    ]
+
+    request = models.ForeignKey(HelpRequest, on_delete=models.CASCADE, related_name='proposals')
+    applicant = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='help_request_proposals')
+    cover_note = models.TextField(blank=True)
+    proposed_kp = models.PositiveIntegerField(validators=[MinValueValidator(1)])
+    eta_days = models.PositiveIntegerField(
+        null=True,
+        blank=True,
+        validators=[MinValueValidator(1)],
+    )
+    status = models.CharField(max_length=12, choices=STATUS_CHOICES, default='pending')
+    selected_at = models.DateTimeField(null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    def clean(self):
+        """Block invalid self-proposals and invalid bounty ranges."""
+        if self.request_id and self.applicant_id and self.request.user_id == self.applicant_id:
+            raise ValidationError('You cannot apply to your own request.')
+        if self.request_id and self.proposed_kp > self.request.kp_bounty:
+            raise ValidationError('Proposed KP cannot exceed the request bounty.')
+
+    def __str__(self):
+        return f'Proposal by {self.applicant.username} for request #{self.request_id}'
+
+    class Meta:
+        ordering = ['-created_at']
+        indexes = [
+            models.Index(fields=['request', 'status']),
+            models.Index(fields=['applicant', 'status']),
+            models.Index(fields=['created_at']),
+        ]
+        constraints = [
+            models.UniqueConstraint(fields=['request', 'applicant'], name='unique_help_request_applicant'),
         ]
 
 

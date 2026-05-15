@@ -1,15 +1,11 @@
-import logging
-
-from django.conf import settings
-from django.core.mail import send_mail
 from django.db.models.signals import post_save, pre_save
 from django.dispatch import receiver
-from django.template.loader import render_to_string
 from django.urls import reverse
-from django.utils.html import strip_tags
 
 from marketplace.models import HelpRequest
+from marketplace.realtime import emit_user_event
 
+from .emailing import send_templated_email
 from .models import Notification
 from .utils import allows_email, allows_in_app
 
@@ -21,23 +17,12 @@ def _send_notification_email(subject, template_name, context, recipient_email):
     if not recipient_email:
         return
 
-    try:
-        html_body = render_to_string(template_name, context)
-        send_mail(
-            subject=subject,
-            message=strip_tags(html_body),
-            from_email=getattr(settings, 'DEFAULT_FROM_EMAIL', None),
-            recipient_list=[recipient_email],
-            html_message=html_body,
-            fail_silently=False,
-        )
-    except Exception:
-        logger.exception(
-            'Failed to send notification email: subject=%s template=%s recipient=%s',
-            subject,
-            template_name,
-            recipient_email,
-        )
+    send_templated_email(
+        subject=subject,
+        template_name=template_name,
+        context=context,
+        recipient_email=recipient_email,
+    )
 
 
 @receiver(pre_save, sender=HelpRequest)
@@ -74,7 +59,11 @@ def create_help_request_notifications(sender, instance, created, **kwargs):
             _send_notification_email(
                 subject=f"Your request '{instance.title}' has been accepted by {instance.accepted_by.username}.",
                 template_name='emails/claim_notification.html',
-                context={'request_obj': instance, 'poster': instance.user, 'helper': instance.accepted_by},
+                context={
+                    'request_obj': {'title': instance.title, 'kp_bounty': instance.kp_bounty},
+                    'poster': {'username': instance.user.username},
+                    'helper': {'username': instance.accepted_by.username},
+                },
                 recipient_email=instance.user.email,
             )
 

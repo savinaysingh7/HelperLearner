@@ -1,0 +1,58 @@
+{% extends 'base.html' %}
+
+{% block title %}Advanced Analytics{% endblock %}
+
+{% block content %}
+<section class="page-head">
+    <span class="eyebrow"><i class="bi bi-graph-up-arrow"></i>Analytics</span>
+    <h1 class="h3">Conversion & Reliability Metrics</h1>
+    <p class="text-muted mb-0">Funnel conversion, resolution timing, and dispute trends.</p>
+</section>
+
+<div class="row g-3 mb-3">
+    <div class="col-12 col-md-4"><div class="card metric-card h-100"><div class="card-body"><div class="metric-label">Request Resolution</div><div class="metric-value">{{ conversion.request_resolution_rate }}%</div></div></div></div>
+    <div class="col-12 col-md-4"><div class="card metric-card h-100"><div class="card-body"><div class="metric-label">Job Completion</div><div class="metric-value">{{ conversion.job_completion_rate }}%</div></div></div></div>
+    <div class="col-12 col-md-4"><div class="card metric-card h-100"><div class="card-body"><div class="metric-label">Job Dispute Rate</div><div class="metric-value">{{ conversion.job_dispute_rate }}%</div></div></div></div>
+</div>
+
+<div class="row g-3">
+    <div class="col-12 col-lg-6">
+        <div class="card h-100">
+            <div class="card-header fw-semibold">Request Funnel</div>
+            <div class="card-body">
+                <div class="small">Open: {{ request_funnel.open }}</div>
+                <div class="small">In Progress: {{ request_funnel.in_progress }}</div>
+                <div class="small">Resolved: {{ request_funnel.resolved }}</div>
+                <div class="small">Canceled: {{ request_funnel.canceled }}</div>
+                <hr>
+                <div class="small text-muted">Avg resolution time: {{ resolution_time|default:'N/A' }}</div>
+            </div>
+        </div>
+    </div>
+    <div class="col-12 col-lg-6">
+        <div class="card h-100">
+            <div class="card-header fw-semibold">Paid Job Funnel</div>
+            <div class="card-body">
+                <div class="small">Open: {{ job_funnel.open }}</div>
+                <div class="small">In Progress: {{ job_funnel.in_progress }}</div>
+                <div class="small">Completed: {{ job_funnel.completed }}</div>
+                <div class="small">Disputed: {{ job_funnel.disputed }}</div>
+                <div class="small">Canceled: {{ job_funnel.canceled }}</div>
+                <hr>
+                <div class="small text-muted">Avg completion time: {{ paid_resolution_time|default:'N/A' }}</div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="card mt-3">
+    <div class="card-header fw-semibold">Dispute Trend (Last 6 buckets)</div>
+    <div class="card-body">
+        {% for row in dispute_trends %}
+            <div class="d-flex justify-content-between small mb-1"><span>{{ row.month|date:'M Y' }}</span><strong>{{ row.total }}</strong></div>
+        {% empty %}
+            <div class="text-muted">No dispute records yet.</div>
+        {% endfor %}
+    </div>
+</div>
+{% endblock %}

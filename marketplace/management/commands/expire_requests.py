@@ -1,16 +1,13 @@
 import logging
 
-from django.conf import settings
-from django.core.mail import send_mail
 from django.core.management.base import BaseCommand
 from django.db import transaction
-from django.template.loader import render_to_string
 from django.urls import reverse
 from django.utils import timezone
-from django.utils.html import strip_tags
 
 from accounts.models import CustomUser
 from marketplace.models import HelpRequest
+from notifications.emailing import send_templated_email
 from notifications.models import Notification
 from notifications.utils import allows_email, allows_in_app
 

@@ -58,6 +58,32 @@
                             <div class="count">{{ helped_count }}</div>
                         </div>
                     </div>
+                    <div class="col-12 col-sm-6">
+                        <div class="tile text-center">
+                            <div class="label small text-muted text-uppercase fw-bold">Requests Helped</div>
+                            <div class="count">{{ helped_count }}</div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="section-divider"></div>
+                <h2 class="h6 mb-2">Portfolio Highlights</h2>
+                <div class="row g-2">
+                    {% for item in portfolio_items %}
+                        <div class="col-12 col-md-6">
+                            <div class="surface-card p-3 h-100">
+                                <div class="fw-semibold">{{ item.title }}</div>
+                                <div class="small text-muted mb-1">{{ item.primary_skill.name|default:'General' }}</div>
+                                <div class="small">{{ item.summary|truncatechars:110 }}</div>
+                                <div class="small mt-1">
+                                    {% if item.project_url %}<a href="{{ item.project_url }}" target="_blank" rel="noopener">Project</a>{% endif %}
+                                    {% if item.evidence_url %} {% if item.project_url %}|{% endif %} <a href="{{ item.evidence_url }}" target="_blank" rel="noopener">Evidence</a>{% endif %}
+                                </div>
+                            </div>
+                        </div>
+                    {% empty %}
+                        <div class="col-12"><div class="small text-muted">No portfolio items shared yet.</div></div>
+                    {% endfor %}
                 </div>
             </div>
         </div>

@@ -1,4 +1,4 @@
-﻿from django import forms
+﻿from decimal import Decimal, InvalidOperation
 
 from .models import Comment, HelpRequest, Rating, SavedSearch, Skill, Tag
 
@@ -54,14 +54,24 @@ class HelpRequestForm(forms.ModelForm):
                 continue
             seen.add(tag_name)
             unique_tags.append(tag_name)
+            if len(unique_tags) >= 10:
+                break
 
         return unique_tags
 
     def save_tags(self, request_obj):
         """Persist parsed tags for a saved request object."""
         tag_names = self.cleaned_data.get('tags_input', [])
-        tags = [Tag.objects.get_or_create(name=tag_name)[0] for tag_name in tag_names]
-        request_obj.tags.set(tags)
+        if not tag_names:
+            request_obj.tags.clear()
+            return
+        # Fetch existing tags in one query
+        existing = {t.name: t for t in Tag.objects.filter(name__in=tag_names)}
+        # Create missing ones individually so Tag.save() slug logic runs
+        for name in tag_names:
+            if name not in existing:
+                existing[name] = Tag.objects.get_or_create(name=name)[0]
+        request_obj.tags.set([existing[name] for name in tag_names if name in existing])
 
 
 class CommentForm(forms.ModelForm):
@@ -83,6 +93,30 @@ class CommentForm(forms.ModelForm):
         labels = {
             'is_private': 'Private (only visible to requester and helper)',
         }
+
+
+class ChatMessageForm(forms.ModelForm):
+    """Form for sending chat messages in a thread."""
+
+    class Meta:
+        model = ChatMessage
+        fields = ['content']
+        widgets = {
+            'content': forms.Textarea(
+                attrs={
+                    'class': 'form-control',
+                    'rows': 2,
+                    'placeholder': 'Write a message...',
+                    'maxlength': 2000,
+                }
+            ),
+        }
+
+    def clean_content(self):
+        content = (self.cleaned_data.get('content') or '').strip()
+        if not content:
+            raise forms.ValidationError('Message cannot be empty.')
+        return content
 
 
 class SearchForm(forms.Form):

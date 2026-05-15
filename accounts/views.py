@@ -1,16 +1,28 @@
 from datetime import timedelta
+from decimal import Decimal
 
 from django.contrib import messages
 from django.contrib.auth import login
 from django.contrib.auth.decorators import login_required
 from django.db import transaction
-from django.db.models import Avg, Count, Sum
+from django.db.models import Avg, Count, Q, Sum, Value
 from django.db.models.functions import Coalesce, TruncMonth
 from django.shortcuts import get_object_or_404, redirect, render
 from django.utils import timezone
 from django.views.decorators.csrf import csrf_protect
 
-from marketplace.models import HelpRequest
+from marketplace.models import (
+    FreelanceJob,
+    FreelanceJobProposal,
+    HelpRequest,
+    HelpRequestProposal,
+    JobDispute,
+    JobMilestone,
+    KPTransfer,
+)
+from marketplace.realtime import emit_user_event
+from marketplace.risk import evaluate_kp_transfer_risk
+from notifications.models import Notification
 
 from .forms import DeveloperSignUpForm, KPTransferLookupForm, UserUpdateForm
 from .models import CustomUser
@@ -79,6 +91,7 @@ def public_profile(request, username):
         'profile_user': profile_user,
         'posted_count': HelpRequest.objects.filter(user=profile_user).count(),
         'helped_count': HelpRequest.objects.filter(accepted_by=profile_user, status='resolved').count(),
+        'portfolio_items': profile_user.portfolio_items.select_related('primary_skill').all()[:6],
     }
     return render(request, 'accounts/public_profile.html', context)
 
@@ -91,6 +104,12 @@ def edit_profile(request):
         form = UserUpdateForm(request.POST, instance=request.user)
         if form.is_valid():
             form.save()
+            log_event(
+                user=request.user,
+                action='profile_update',
+                ip_address=get_client_ip(request),
+                metadata={'changed_fields': form.changed_data}
+            )
             messages.success(request, 'Profile updated successfully!')
             return redirect('profile')
     else:
@@ -115,6 +134,41 @@ def dashboard(request):
     success_rate = round((resolved_posted_count / requests_posted_count) * 100, 2) if requests_posted_count else 0
 
     average_rating_received = request.user.ratings_received.aggregate(avg=Avg('score'))['avg']
+    pending_request_proposals = HelpRequestProposal.objects.filter(
+        request__user=request.user,
+        request__status='open',
+        status='pending',
+    ).count()
+    pending_job_proposals = FreelanceJobProposal.objects.filter(
+        job__client=request.user,
+        job__status='open',
+        status='pending',
+    ).count()
+    pending_milestone_reviews = JobMilestone.objects.filter(
+        job__client=request.user,
+        job__status='in_progress',
+        status='submitted',
+    ).count()
+    open_disputes = JobDispute.objects.filter(
+        status='open',
+    ).filter(
+        Q(job__client=request.user) | Q(job__freelancer=request.user)
+    ).count()
+    unread_notifications = Notification.objects.filter(user=request.user, is_read=False).count()
+    action_required_total = (
+        pending_request_proposals
+        + pending_job_proposals
+        + pending_milestone_reviews
+        + open_disputes
+        + unread_notifications
+    )
+    paid_jobs_posted = FreelanceJob.objects.filter(client=request.user).count()
+    paid_jobs_completed = FreelanceJob.objects.filter(client=request.user, status='completed').count()
+    paid_jobs_taken = FreelanceJob.objects.filter(freelancer=request.user).count()
+    paid_income = (
+        request.user.wallet_entries.filter(direction='credit', source_type='job_milestone_release')
+        .aggregate(total=Coalesce(Sum('amount_inr'), Value(Decimal('0.00'))))['total']
+    )
 
     now = timezone.now()
     first_month = _month_start(now, 5)
@@ -164,8 +218,20 @@ def dashboard(request):
         'requests_helped_count': requests_helped_count,
         'success_rate': success_rate,
         'average_rating_received': average_rating_received,
+        'paid_jobs_posted': paid_jobs_posted,
+        'paid_jobs_completed': paid_jobs_completed,
+        'paid_jobs_taken': paid_jobs_taken,
+        'paid_income': paid_income,
         'monthly_activity': monthly_activity,
         'next_bonus_hours': _next_bonus_hours(request.user, now),
+        'action_required_total': action_required_total,
+        'action_required_breakdown': {
+            'request_proposals': pending_request_proposals,
+            'job_proposals': pending_job_proposals,
+            'milestone_reviews': pending_milestone_reviews,
+            'open_disputes': open_disputes,
+            'unread_notifications': unread_notifications,
+        },
     }
     return render(request, 'accounts/dashboard.html', context)
 
@@ -237,7 +303,27 @@ def transfer_kp(request):
             receiver.knowledge_points += amount
             sender.save(update_fields=['knowledge_points'])
             receiver.save(update_fields=['knowledge_points'])
+            KPTransfer.objects.create(sender=sender, recipient=receiver, amount=amount)
 
+        log_event(
+            user=request.user,
+            action='kp_transfer',
+            target_user=recipient,
+            ip_address=get_client_ip(request),
+            metadata={'amount': amount}
+        )
+
+        evaluate_kp_transfer_risk(sender, receiver, amount)
+        Notification.objects.create(
+            user=receiver,
+            message=f'You received {amount} KP from {sender.username}.',
+            link='/accounts/dashboard/',
+        )
+        emit_user_event(
+            receiver.pk,
+            'kp.received',
+            {'from': sender.username, 'amount': amount},
+        )
         messages.success(request, f'Successfully transferred {amount} KP to {receiver.username}.')
         return redirect('dashboard')
 

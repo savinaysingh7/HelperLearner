@@ -195,6 +195,129 @@ a:hover {
     color: #7b8da5;
 }
 
+.navbar .nav-link.active {
+    color: #ffffff;
+    background: rgba(104, 213, 194, 0.15);
+    border-color: rgba(104, 213, 194, 0.3);
+}
+
+.dropdown-menu {
+    border: 1px solid var(--hl-border);
+    border-radius: 0.86rem;
+    box-shadow: var(--hl-shadow-md);
+    padding: 0.34rem;
+    background: rgba(16, 25, 40, 0.98);
+}
+
+.dropdown-item {
+    border-radius: 0.54rem;
+    font-weight: 600;
+    color: #d8e4f6;
+}
+
+.dropdown-item:hover,
+.dropdown-item:focus {
+    color: #ffffff;
+    background: rgba(156, 176, 203, 0.18);
+}
+
+.dropdown-item.active {
+    color: #ffffff;
+    background: rgba(83, 209, 187, 0.2);
+}
+
+.dropdown-item .badge {
+    font-size: 0.66rem;
+    line-height: 1.1;
+}
+
+.dropdown-divider {
+    border-color: var(--hl-border);
+}
+
+.nav-search {
+    width: min(100%, 240px);
+    min-width: 180px;
+}
+
+.nav-search .input-group-text,
+.nav-search .form-control {
+    border-color: var(--hl-border);
+    background: rgba(18, 29, 46, 0.96);
+    color: var(--hl-muted);
+}
+
+.nav-search .form-control {
+    border-left: 0;
+    border-right: 0;
+    color: #eaf3ff;
+}
+
+.nav-search .form-control::placeholder {
+    color: #7f95b4;
+}
+
+.search-kbd {
+    min-width: 2rem;
+    justify-content: center;
+    font-size: 0.72rem;
+    font-weight: 800;
+    color: #86a0c2;
+}
+
+.nav-quick-actions {
+    margin-left: auto;
+    align-items: center;
+    gap: 0.42rem !important;
+}
+
+.nav-collapse-shell {
+    row-gap: 0.6rem;
+}
+
+.nav-primary {
+    align-items: center;
+    gap: 0.08rem;
+}
+
+.nav-create-btn {
+    font-weight: 700;
+    border-color: rgba(70, 189, 169, 0.9);
+    box-shadow: none;
+    padding-inline: 0.68rem;
+}
+
+.nav-create-btn.active,
+.nav-create-btn:hover,
+.nav-create-btn:focus {
+    border-color: rgba(104, 213, 194, 0.9);
+}
+
+.nav-icon-btn {
+    width: 2rem;
+    height: 2rem;
+    padding: 0;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 0.62rem;
+}
+
+.nav-icon-btn.active {
+    border-color: rgba(83, 209, 187, 0.6);
+    background: rgba(83, 209, 187, 0.18);
+}
+
+.nav-badge {
+    position: absolute;
+    top: -0.36rem;
+    right: -0.36rem;
+    font-size: 0.65rem;
+    line-height: 1;
+    padding: 0.24rem 0.33rem;
+}
+
+.nav-kp-pill,
 .balance-pill {
     background: #e8f0ff;
     border: 1px solid #c3d8fb;
@@ -525,8 +648,8 @@ a:hover {
 }
 
 .private-comment {
-    border-left: 4px solid var(--hl-accent) !important;
-    background: #fffaf0 !important;
+    border-left: 4px solid var(--hl-warning) !important;
+    background: rgba(243, 179, 86, 0.09) !important;
 }
 
 .private-comment-badge {

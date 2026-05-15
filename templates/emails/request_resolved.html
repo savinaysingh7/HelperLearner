@@ -1,0 +1,34 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+    <meta charset="utf-8">
+</head>
+
+<body style="font-family: 'Segoe UI', Arial, sans-serif; background: #0f172a; color: #e2e8f0; margin: 0; padding: 0;">
+    <div style="max-width: 600px; margin: 0 auto; padding: 32px 24px;">
+        <div style="text-align: center; margin-bottom: 24px;">
+            <h1 style="color: #38bdf8; margin: 0; font-size: 28px;">HelperLearner</h1>
+        </div>
+        <div style="background: #1e293b; border-radius: 12px; padding: 32px; border: 1px solid #334155;">
+            <h2 style="color: #22c55e; margin-top: 0;">Request resolved! ✅</h2>
+            <p>Your request has been successfully resolved:</p>
+            <div
+                style="background: #0f172a; border-radius: 8px; padding: 16px; margin: 16px 0; border-left: 4px solid #22c55e;">
+                <strong style="color: #f8fafc;">{{ request_title }}</strong>
+                <p style="margin: 8px 0 0; color: #94a3b8;">{{ kp_bounty }} KP transferred to {{ helper_username }}</p>
+            </div>
+            <p>Don't forget to rate the helper to build community trust!</p>
+            <div style="text-align: center; margin-top: 24px;">
+                <a href="{{ request_url }}"
+                    style="background: #22c55e; color: #0f172a; padding: 12px 32px; border-radius: 8px; text-decoration: none; font-weight: 600;">Rate
+                    & Review</a>
+            </div>
+        </div>
+        <p style="text-align: center; color: #64748b; font-size: 12px; margin-top: 24px;">
+            HelperLearner notifications — manage preferences in your profile settings.
+        </p>
+    </div>
+</body>
+
+</html>

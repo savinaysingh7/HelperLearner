@@ -1,0 +1,76 @@
+version: '3.8'
+
+services:
+  web:
+    build: .
+    command: gunicorn helperlearner_root.wsgi --bind 0.0.0.0:8000 --workers 3
+    ports:
+      - "8000:8000"
+    env_file:
+      - .env
+    environment:
+      - DATABASE_URL=postgres://helperlearner:helperlearner@db:5432/helperlearner
+      - REDIS_URL=redis://redis:6379/0
+      - CELERY_BROKER_URL=redis://redis:6379/0
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_started
+    volumes:
+      - static_data:/app/staticfiles
+      - media_data:/app/media
+
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: helperlearner
+      POSTGRES_USER: helperlearner
+      POSTGRES_PASSWORD: helperlearner
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U helperlearner"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+
+  celery:
+    build: .
+    command: celery -A helperlearner_root worker --loglevel=info
+    env_file:
+      - .env
+    environment:
+      - DATABASE_URL=postgres://helperlearner:helperlearner@db:5432/helperlearner
+      - REDIS_URL=redis://redis:6379/0
+      - CELERY_BROKER_URL=redis://redis:6379/0
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_started
+
+  celery-beat:
+    build: .
+    command: celery -A helperlearner_root beat --loglevel=info
+    env_file:
+      - .env
+    environment:
+      - DATABASE_URL=postgres://helperlearner:helperlearner@db:5432/helperlearner
+      - REDIS_URL=redis://redis:6379/0
+      - CELERY_BROKER_URL=redis://redis:6379/0
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_started
+
+volumes:
+  postgres_data:
+  static_data:
+  media_data:

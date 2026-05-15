@@ -1,0 +1,23 @@
+{% extends 'base.html' %}
+
+{% block title %}Cancel Paid Job | HelperLearner{% endblock %}
+
+{% block content %}
+<div class="row justify-content-center">
+    <div class="col-12 col-md-8 col-lg-6">
+        <div class="card confirm-card">
+            <div class="card-body p-4 text-center">
+                <div class="confirm-icon danger mx-auto"><i class="bi bi-x-octagon"></i></div>
+                <h1 class="h4">Cancel Paid Job?</h1>
+                <p class="text-muted">This refunds remaining escrow back to your INR wallet.</p>
+                <p class="fw-semibold mb-4">{{ job.title }}</p>
+                <form method="post" class="d-flex gap-2 justify-content-center flex-wrap">
+                    {% csrf_token %}
+                    <button type="submit" class="btn btn-danger">Yes, cancel job</button>
+                    <a href="{% url 'freelance_job_detail' job.pk %}" class="btn btn-outline-secondary">Go back</a>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

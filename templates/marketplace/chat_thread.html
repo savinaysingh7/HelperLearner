@@ -1,0 +1,277 @@
+{% extends 'base.html' %}
+
+{% block title %}{{ thread.display_title }} | Chat{% endblock %}
+
+{% block content %}
+<section class="page-head d-flex flex-column flex-md-row justify-content-between align-items-md-center gap-2">
+    <div>
+        <span class="eyebrow"><i class="bi bi-chat-left-text"></i>Conversation</span>
+        <h1 class="h3 mb-1">{{ thread.display_title }}</h1>
+        <p class="text-muted mb-0">
+            Participants:
+            {% for item in participants %}
+                <span class="me-1">{{ item.user.username }}{% if not forloop.last %},{% endif %}</span>
+            {% endfor %}
+        </p>
+    </div>
+    <div class="d-flex gap-2">
+        {% if origin_url %}
+            <a href="{{ origin_url }}" class="btn btn-outline-secondary btn-sm">{{ origin_label }}</a>
+        {% endif %}
+        <a href="{% url 'chat_inbox' %}" class="btn btn-outline-light btn-sm">Back to Inbox</a>
+    </div>
+</section>
+
+<div class="card">
+    <div class="card-body p-0">
+        <div id="chatScrollRegion" class="chat-thread-window p-3 p-lg-4" data-thread-id="{{ thread.pk }}" data-current-user-id="{{ user.pk }}">
+            {% for chat_message in chat_messages %}
+                <div class="chat-message-row {% if chat_message.sender_id == user.id %}is-self{% endif %}" data-message-id="{{ chat_message.pk }}">
+                    <div class="chat-bubble">
+                        <div class="chat-meta">
+                            <span class="fw-semibold">{{ chat_message.sender.username }}</span>
+                            <small class="text-muted">{{ chat_message.created_at|date:'M d, H:i' }}</small>
+                        </div>
+                        <div class="chat-content">{{ chat_message.content|linebreaksbr }}</div>
+                    </div>
+                </div>
+            {% empty %}
+                <div class="empty-state text-center py-5">
+                    <div class="icon"><i class="bi bi-chat-square-text"></i></div>
+                    <h2 class="h5 mt-2">No messages yet</h2>
+                    <p class="text-muted mb-0">Say hello and start collaboration.</p>
+                </div>
+            {% endfor %}
+        </div>
+        <div class="chat-composer border-top p-3">
+            <form id="chatComposerForm" method="post" class="row g-2 align-items-end" data-async-submit="true" novalidate>
+                {% csrf_token %}
+                <div class="col-12 col-md">
+                    <label class="form-label mb-1" for="{{ form.content.id_for_label }}">Message</label>
+                    {{ form.content }}
+                    {% for error in form.content.errors %}
+                        <div class="text-danger small mt-1">{{ error }}</div>
+                    {% endfor %}
+                    <div id="chatComposerError" class="text-danger small mt-1 d-none"></div>
+                    <div id="chatLiveStatus" class="small text-muted mt-1">Live updates are on.</div>
+                </div>
+                <div class="col-12 col-md-auto">
+                    <button type="submit" class="btn btn-primary w-100">Send</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    (function () {
+        var region = document.getElementById("chatScrollRegion");
+        var form = document.getElementById("chatComposerForm");
+        var input = document.getElementById("id_content");
+        var errorBox = document.getElementById("chatComposerError");
+        var statusBox = document.getElementById("chatLiveStatus");
+        var threadId = region ? parseInt(region.dataset.threadId || "0", 10) : 0;
+        var currentUserId = region ? parseInt(region.dataset.currentUserId || "0", 10) : 0;
+        var pollHandle = null;
+        var pollInFlight = false;
+
+        function scrollToBottom() {
+            if (region) {
+                region.scrollTop = region.scrollHeight;
+            }
+        }
+
+        function getLastMessageId() {
+            if (!region) {
+                return 0;
+            }
+            var rows = region.querySelectorAll("[data-message-id]");
+            var maxId = 0;
+            rows.forEach(function (row) {
+                var id = parseInt(row.dataset.messageId || "0", 10);
+                if (id > maxId) {
+                    maxId = id;
+                }
+            });
+            return maxId;
+        }
+
+        function removeEmptyState() {
+            if (!region) {
+                return;
+            }
+            var emptyState = region.querySelector(".empty-state");
+            if (emptyState) {
+                emptyState.remove();
+            }
+        }
+
+        function buildMessageRow(message, isSelf) {
+            var row = document.createElement("div");
+            row.className = "chat-message-row" + (isSelf ? " is-self" : "");
+            row.dataset.messageId = String(message.message_id);
+
+            var bubble = document.createElement("div");
+            bubble.className = "chat-bubble";
+
+            var meta = document.createElement("div");
+            meta.className = "chat-meta";
+
+            var sender = document.createElement("span");
+            sender.className = "fw-semibold";
+            sender.textContent = message.sender;
+
+            var time = document.createElement("small");
+            time.className = "text-muted";
+            time.textContent = message.created_at_label || "";
+
+            meta.appendChild(sender);
+            meta.appendChild(time);
+
+            var content = document.createElement("div");
+            content.className = "chat-content";
+            content.textContent = message.content || "";
+
+            bubble.appendChild(meta);
+            bubble.appendChild(content);
+            row.appendChild(bubble);
+            return row;
+        }
+
+        function appendMessage(message) {
+            if (!region || !message || !message.message_id) {
+                return;
+            }
+            if (region.querySelector('[data-message-id="' + message.message_id + '"]')) {
+                return;
+            }
+            removeEmptyState();
+            var isSelf = parseInt(message.sender_id || "0", 10) === currentUserId;
+            region.appendChild(buildMessageRow(message, isSelf));
+            scrollToBottom();
+        }
+
+        async function pollForMessages() {
+            if (!region || pollInFlight) {
+                return;
+            }
+            pollInFlight = true;
+            try {
+                var afterId = getLastMessageId();
+                var response = await fetch(window.location.pathname + "?after_id=" + afterId, {
+                    headers: {
+                        "X-Requested-With": "XMLHttpRequest",
+                        "Accept": "application/json"
+                    }
+                });
+                if (!response.ok) {
+                    return;
+                }
+                var data = await response.json();
+                if (data && Array.isArray(data.messages)) {
+                    data.messages.forEach(appendMessage);
+                }
+            } catch (error) {
+                if (statusBox) {
+                    statusBox.textContent = "Live sync paused. Retrying...";
+                }
+            } finally {
+                pollInFlight = false;
+            }
+        }
+
+        async function sendMessage(event) {
+            if (!form || !input) {
+                return;
+            }
+            event.preventDefault();
+            var messageValue = (input.value || "").trim();
+            if (!messageValue) {
+                if (errorBox) {
+                    errorBox.textContent = "Message cannot be empty.";
+                    errorBox.classList.remove("d-none");
+                }
+                return;
+            }
+
+            if (errorBox) {
+                errorBox.textContent = "";
+                errorBox.classList.add("d-none");
+            }
+
+            var submitButton = form.querySelector('button[type="submit"]');
+            if (submitButton) {
+                submitButton.disabled = true;
+                submitButton.innerHTML = '<span class="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true"></span>Sending...';
+            }
+
+            try {
+                var response = await fetch(form.action || window.location.pathname, {
+                    method: "POST",
+                    headers: {
+                        "X-Requested-With": "XMLHttpRequest",
+                        "Accept": "application/json"
+                    },
+                    body: new FormData(form)
+                });
+                var payload = await response.json();
+                if (!response.ok || !payload.ok) {
+                    throw new Error("Unable to send message.");
+                }
+                appendMessage(payload.message);
+                input.value = "";
+                input.focus();
+                if (statusBox) {
+                    statusBox.textContent = "Message sent.";
+                }
+            } catch (error) {
+                if (errorBox) {
+                    errorBox.textContent = "Could not send message. Please try again.";
+                    errorBox.classList.remove("d-none");
+                }
+            } finally {
+                if (submitButton) {
+                    submitButton.disabled = false;
+                    submitButton.textContent = "Send";
+                }
+            }
+        }
+
+        function handleRealtimeEvent(event) {
+            var details = event && event.detail ? event.detail : null;
+            if (!details || details.event !== "chat.message" || !details.payload) {
+                return;
+            }
+            var payload = details.payload;
+            if (parseInt(payload.thread_id || "0", 10) !== threadId) {
+                return;
+            }
+            appendMessage(payload);
+        }
+
+        scrollToBottom();
+        if (form) {
+            form.addEventListener("submit", sendMessage);
+        }
+        window.addEventListener("hl:ws-event", handleRealtimeEvent);
+
+        pollHandle = window.setInterval(pollForMessages, 4000);
+        document.addEventListener("visibilitychange", function () {
+            if (!document.hidden) {
+                pollForMessages();
+            }
+        });
+        window.addEventListener("beforeunload", function () {
+            if (pollHandle) {
+                window.clearInterval(pollHandle);
+            }
+        });
+        pollForMessages();
+        if (statusBox) {
+            statusBox.textContent = "Live updates are on.";
+        }
+    })();
+</script>
+{% endblock %}

@@ -29,7 +29,7 @@ DATABASES = {
     'default': dj_database_url.config(
         default=config('DATABASE_URL'),
         conn_max_age=config('DATABASE_CONN_MAX_AGE', default=600, cast=int),
-        ssl_require=config('DATABASE_SSL_REQUIRE', default=True, cast=bool),
+        ssl_require=env_bool('DATABASE_SSL_REQUIRE', default=True),
     )
 }
 
@@ -47,4 +47,4 @@ EMAIL_HOST = config('EMAIL_HOST', default='')
 EMAIL_PORT = config('EMAIL_PORT', default=587, cast=int)
 EMAIL_HOST_USER = config('EMAIL_HOST_USER', default='')
 EMAIL_HOST_PASSWORD = config('EMAIL_HOST_PASSWORD', default='')
-EMAIL_USE_TLS = config('EMAIL_USE_TLS', default=True, cast=bool)
+EMAIL_USE_TLS = env_bool('EMAIL_USE_TLS', default=True)

@@ -1,0 +1,112 @@
+{% extends 'base.html' %}
+
+{% block title %}Integrations{% endblock %}
+
+{% block content %}
+<section class="page-head">
+    <span class="eyebrow"><i class="bi bi-plug"></i>Integrations</span>
+    <h1 class="h3">API Keys & Webhooks</h1>
+    <p class="text-muted mb-0">Connect external systems with secure API access and status webhooks.</p>
+</section>
+
+{% if raw_key_once %}
+    <div class="alert alert-warning"><strong>Copy this API key now:</strong> <code>{{ raw_key_once }}</code></div>
+{% endif %}
+
+<div class="row g-3">
+    <div class="col-12 col-lg-6">
+        <div class="card mb-3">
+            <div class="card-header fw-semibold">Create API Key</div>
+            <div class="card-body">
+                <form method="post" class="vstack gap-2">
+                    {% csrf_token %}
+                    <input type="hidden" name="action" value="create_api_key">
+                    {{ key_form.name.label_tag }}{{ key_form.name }}
+                    <button class="btn btn-primary" type="submit">Generate Key</button>
+                </form>
+            </div>
+        </div>
+
+        <div class="card">
+            <div class="card-header fw-semibold">Active API Keys</div>
+            <ul class="list-group list-group-flush">
+                {% for key in api_keys %}
+                    <li class="list-group-item d-flex justify-content-between align-items-center">
+                        <div>
+                            <div class="fw-semibold">{{ key.name }}</div>
+                            <div class="small text-muted">{{ key.prefix }}... | {{ key.created_at|date:'Y-m-d' }}</div>
+                        </div>
+                        {% if key.is_active %}
+                            <form method="post" action="{% url 'revoke_api_key' key.pk %}">{% csrf_token %}<button class="btn btn-sm btn-outline-danger" type="submit">Revoke</button></form>
+                        {% else %}
+                            <span class="badge text-bg-secondary">Revoked</span>
+                        {% endif %}
+                    </li>
+                {% empty %}
+                    <li class="list-group-item text-muted">No API keys yet.</li>
+                {% endfor %}
+            </ul>
+        </div>
+    </div>
+
+    <div class="col-12 col-lg-6">
+        <div class="card mb-3">
+            <div class="card-header fw-semibold">Add Webhook Endpoint</div>
+            <div class="card-body">
+                <form method="post" class="vstack gap-2">
+                    {% csrf_token %}
+                    <input type="hidden" name="action" value="create_webhook">
+                    {{ webhook_form.name.label_tag }}{{ webhook_form.name }}
+                    {{ webhook_form.url.label_tag }}{{ webhook_form.url }}
+                    {{ webhook_form.subscribed_events.label_tag }}{{ webhook_form.subscribed_events }}
+                    <div class="form-check">{{ webhook_form.is_active }} <label class="form-check-label" for="{{ webhook_form.is_active.id_for_label }}">Active</label></div>
+                    <button class="btn btn-primary" type="submit">Save Endpoint</button>
+                </form>
+            </div>
+        </div>
+
+        <div class="card mb-3">
+            <div class="card-header fw-semibold">Webhook Endpoints</div>
+            <ul class="list-group list-group-flush">
+                {% for endpoint in webhooks %}
+                    <li class="list-group-item">
+                        <div class="d-flex justify-content-between align-items-center gap-2">
+                            <div>
+                                <div class="fw-semibold">{{ endpoint.name }}</div>
+                                <div class="small text-muted">{{ endpoint.url }}</div>
+                            </div>
+                            <div class="d-flex gap-2">
+                                <form method="post" action="{% url 'test_webhook' endpoint.pk %}">{% csrf_token %}<button class="btn btn-sm btn-outline-primary" type="submit">Test</button></form>
+                                <form method="post" action="{% url 'delete_webhook' endpoint.pk %}">{% csrf_token %}<button class="btn btn-sm btn-outline-danger" type="submit">Delete</button></form>
+                            </div>
+                        </div>
+                    </li>
+                {% empty %}
+                    <li class="list-group-item text-muted">No webhook endpoints yet.</li>
+                {% endfor %}
+            </ul>
+        </div>
+
+        <div class="card">
+            <div class="card-header fw-semibold">Recent Deliveries</div>
+            <div class="table-responsive">
+                <table class="table mb-0">
+                    <thead><tr><th>When</th><th>Event</th><th>Status</th><th>Endpoint</th></tr></thead>
+                    <tbody>
+                        {% for delivery in deliveries %}
+                            <tr>
+                                <td>{{ delivery.created_at|date:'m-d H:i' }}</td>
+                                <td>{{ delivery.event_type }}</td>
+                                <td>{% if delivery.succeeded %}<span class="badge text-bg-success">OK</span>{% else %}<span class="badge text-bg-danger">Fail</span>{% endif %}</td>
+                                <td>{{ delivery.endpoint.name }}</td>
+                            </tr>
+                        {% empty %}
+                            <tr><td colspan="4" class="text-muted text-center py-3">No deliveries yet.</td></tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

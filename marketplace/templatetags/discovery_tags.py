@@ -38,3 +38,11 @@ def expiry_badge_class(expires_at):
     if days_left <= 1:
         return 'text-bg-warning'
     return 'text-bg-info'
+
+
+@register.filter
+def get_item(mapping, key):
+    """Template helper for dictionary key lookup."""
+    if mapping is None:
+        return None
+    return mapping.get(key)

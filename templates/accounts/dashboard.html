@@ -45,7 +45,7 @@
                 <div class="metric-value">{{ success_rate }}%</div>
                 <div class="small text-muted mt-1">
                     {% if average_rating_received %}
-                        {{ average_rating_received|star_display }} ({{ average_rating_received|floatformat:1 }})
+                        {{ average_rating_received|star_display }}
                     {% else %}
                         No ratings yet
                     {% endif %}
@@ -127,3 +127,4 @@
     </div>
 </div>
 {% endblock %}
+

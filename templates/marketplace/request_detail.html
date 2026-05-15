@@ -4,7 +4,7 @@
 {% block title %}{{ req.title }} | HelperLearner{% endblock %}
 
 {% block content %}
-<div class="row justify-content-center">
+<div class="row justify-content-center request-detail-layout">
     <div class="col-12 col-xl-10">
         <nav aria-label="breadcrumb" class="mb-3">
             <ol class="breadcrumb mb-0">
@@ -12,6 +12,11 @@
                 <li class="breadcrumb-item active" aria-current="page">Request Details</li>
             </ol>
         </nav>
+        <section class="page-head mb-3">
+            <span class="eyebrow"><i class="bi bi-journal-text"></i>Request</span>
+            <h1 class="h3 mb-1">{{ req.title }}</h1>
+            <p class="text-muted mb-0">Posted by <a class="text-decoration-none" href="{% url 'public_profile' req.user.username %}">{{ req.user.username }}</a></p>
+        </section>
 
         <article class="card request-card request-detail-card mb-4">
             <div class="card-body p-4">
@@ -53,6 +58,16 @@
                     {% endfor %}
                 </div>
 
+                {% if req.ai_summary %}
+                    <div class="alert alert-info py-2 px-3 mb-4 d-flex align-items-center gap-3">
+                        <i class="bi bi-stars fs-4"></i>
+                        <div>
+                            <div class="small fw-bold text-uppercase opacity-75" style="font-size: 0.7rem;">AI Summary</div>
+                            <div class="mb-0">{{ req.ai_summary }}</div>
+                        </div>
+                    </div>
+                {% endif %}
+
                 <h2 class="h5">Description</h2>
                 <p class="mb-4">{{ req.description }}</p>
 
@@ -71,15 +86,20 @@
 
                     <div class="d-flex flex-wrap gap-2">
                         {% if req.status == 'open' %}
-                            {% if user.is_authenticated and user != req.user %}
-                                <form action="{% url 'claim_request' req.pk %}" method="post" class="m-0">
-                                    {% csrf_token %}
-                                    <button type="submit" class="btn btn-primary">Accept Request</button>
-                                </form>
-                            {% elif user == req.user %}
+                            {% if user == req.user %}
                                 <a href="{% url 'edit_request' req.pk %}" class="btn btn-outline-primary">Edit</a>
                                 <a href="{% url 'cancel_request' req.pk %}" class="btn btn-outline-danger">Cancel Request</a>
                                 <a href="{% url 'delete_request' req.pk %}" class="btn btn-danger">Delete</a>
+                            {% elif user.is_authenticated and user_proposal and user_proposal.status == 'pending' %}
+                                <form action="{% url 'withdraw_request_proposal' req.pk %}" method="post" class="m-0">
+                                    {% csrf_token %}
+                                    <button type="submit" class="btn btn-outline-secondary">Withdraw Proposal</button>
+                                </form>
+                            {% elif can_quick_claim %}
+                                <form action="{% url 'claim_request' req.pk %}" method="post" class="m-0">
+                                    {% csrf_token %}
+                                    <button type="submit" class="btn btn-outline-primary">Quick Claim</button>
+                                </form>
                             {% endif %}
                         {% elif req.status == 'in_progress' %}
                             {% if user == req.user %}
@@ -94,15 +114,105 @@
                                 <a href="{% url 'delete_request' req.pk %}" class="btn btn-danger">Delete</a>
                             {% endif %}
                         {% endif %}
+                        {% if req.accepted_by and user.is_authenticated %}
+                            {% if user == req.user or user == req.accepted_by %}
+                                <a href="{% url 'request_chat' req.pk %}" class="btn btn-outline-info">Open Chat</a>
+                            {% endif %}
+                        {% endif %}
+                        <a href="{% url 'report_content' 'request' req.pk %}" class="btn btn-outline-secondary">Report</a>
                     </div>
                 </section>
             </div>
         </article>
 
+        {% if req.status == 'open' and user.is_authenticated %}
+            <section class="row justify-content-center mb-4">
+                <div class="col-12 col-lg-10">
+                    <div class="card surface-card">
+                        <div class="card-body">
+                            {% if can_submit_proposal %}
+                                <h2 class="h5 mb-3">Send Proposal</h2>
+                                <form action="{% url 'submit_request_proposal' req.pk %}" method="post" class="row g-2">
+                                    {% csrf_token %}
+                                    <div class="col-12 col-md-4">
+                                        <label for="{{ proposal_form.proposed_kp.id_for_label }}" class="form-label">Proposed KP</label>
+                                        {{ proposal_form.proposed_kp }}
+                                    </div>
+                                    <div class="col-12 col-md-4">
+                                        <label for="{{ proposal_form.eta_days.id_for_label }}" class="form-label">ETA (days)</label>
+                                        {{ proposal_form.eta_days }}
+                                    </div>
+                                    <div class="col-12">
+                                        <label for="{{ proposal_form.cover_note.id_for_label }}" class="form-label">Approach note</label>
+                                        {{ proposal_form.cover_note }}
+                                    </div>
+                                    <div class="col-12">
+                                        <button type="submit" class="btn btn-primary">Submit Proposal</button>
+                                    </div>
+                                </form>
+                                {% if user_proposal %}
+                                    <p class="small text-muted mt-3 mb-0">
+                                        Your current proposal status: <span class="fw-semibold">{{ user_proposal.get_status_display }}</span>
+                                    </p>
+                                {% endif %}
+                            {% endif %}
+
+                            {% if can_manage_proposals %}
+                                <div class="{% if can_submit_proposal %}section-divider{% endif %}"></div>
+                                <div class="d-flex justify-content-between align-items-center mb-3">
+                                    <h2 class="h5 mb-0">Incoming Proposals</h2>
+                                    <div class="d-flex align-items-center gap-2">
+                                        <span class="badge badge-soft">{{ proposals|length }} total</span>
+                                        {% if proposals|length > 1 %}
+                                            <a href="{% url 'compare_request_proposals' req.pk %}" class="btn btn-sm btn-outline-primary">Compare</a>
+                                        {% endif %}
+                                    </div>
+                                </div>
+                                {% for proposal in proposals %}
+                                    <article class="card mb-2">
+                                        <div class="card-body py-3">
+                                            <div class="d-flex justify-content-between align-items-start gap-2">
+                                                <div>
+                                                    <div class="fw-semibold">
+                                                        <a class="text-decoration-none" href="{% url 'public_profile' proposal.applicant.username %}">{{ proposal.applicant.username }}</a>
+                                                    </div>
+                                                    <div class="small text-muted mt-1">Proposed: {{ proposal.proposed_kp }} KP</div>
+                                                    {% if proposal.eta_days %}
+                                                        <div class="small text-muted">ETA: {{ proposal.eta_days }} day{{ proposal.eta_days|pluralize }}</div>
+                                                    {% endif %}
+                                                    {% if proposal.cover_note %}
+                                                        <p class="small mt-2 mb-0">{{ proposal.cover_note }}</p>
+                                                    {% endif %}
+                                                </div>
+                                                <div class="text-end">
+                                                    <span class="badge {% if proposal.status == 'pending' %}text-bg-warning{% elif proposal.status == 'selected' %}text-bg-success{% elif proposal.status == 'rejected' %}text-bg-secondary{% else %}text-bg-light{% endif %}">{{ proposal.get_status_display }}</span>
+                                                    {% if proposal.status == 'pending' %}
+                                                        <form action="{% url 'select_request_proposal' req.pk proposal.pk %}" method="post" class="mt-2">
+                                                            {% csrf_token %}
+                                                            <button type="submit" class="btn btn-sm btn-primary">Select</button>
+                                                        </form>
+                                                    {% endif %}
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </article>
+                                {% empty %}
+                                    <div class="empty-state text-center py-4">
+                                        <div class="icon"><i class="bi bi-people"></i></div>
+                                        <p class="text-muted mb-0 mt-2">No proposals yet.</p>
+                                    </div>
+                                {% endfor %}
+                            {% endif %}
+                        </div>
+                    </div>
+                </div>
+            </section>
+        {% endif %}
+
         {% if req.status == 'resolved' %}
             <section class="row justify-content-center mb-4">
                 <div class="col-12 col-lg-10">
-                    <div class="card">
+                    <div class="card surface-card">
                         <div class="card-body">
                             <h2 class="h5 mb-3">Helper Rating</h2>
                             {% if existing_rating %}
@@ -133,10 +243,13 @@
 
         <section class="row justify-content-center">
             <div class="col-12 col-lg-10">
-                <h2 class="h4 mb-3">Discussion</h2>
+                <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-3">
+                    <h2 class="h4 mb-0">Discussion</h2>
+                    <span class="small text-muted">{{ comments|length }} comment{{ comments|length|pluralize }}</span>
+                </div>
 
                 {% if user.is_authenticated %}
-                    <div class="card mb-4 form-shell">
+                    <div class="card mb-4 form-shell surface-card">
                         <div class="card-body">
                             <form method="post" novalidate>
                                 {% csrf_token %}
@@ -176,6 +289,23 @@
                                 <small class="text-muted">{{ comment.created_at|timesince }} ago</small>
                             </div>
                             <p class="mb-0">{{ comment.content }}</p>
+                            {% if comment_attachment_map|get_item:comment.pk %}
+                                <div class="mt-2 d-flex flex-wrap gap-2">
+                                    {% for attachment in comment_attachment_map|get_item:comment.pk %}
+                                        <a href="{{ attachment.file.url }}" target="_blank" rel="noopener" class="badge badge-soft text-decoration-none">
+                                            <i class="bi bi-paperclip me-1"></i>{{ attachment.caption|default:attachment.file.name }}
+                                        </a>
+                                    {% endfor %}
+                                </div>
+                            {% endif %}
+                            {% if user.is_authenticated and user == comment.user %}
+                                <form action="{% url 'upload_attachment' 'comment' comment.pk %}" method="post" enctype="multipart/form-data" class="mt-2 d-flex gap-2 align-items-center">
+                                    {% csrf_token %}
+                                    <input type="file" name="file" class="form-control form-control-sm" required>
+                                    <input type="text" name="caption" class="form-control form-control-sm" placeholder="Caption">
+                                    <button type="submit" class="btn btn-sm btn-outline-secondary">Attach</button>
+                                </form>
+                            {% endif %}
                         </div>
                     </article>
                 {% empty %}

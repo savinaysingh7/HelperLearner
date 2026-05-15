@@ -1,0 +1,245 @@
+{% extends 'base.html' %}
+{% load discovery_tags %}
+
+{% block title %}{{ project.name }} Board{% endblock %}
+
+{% block content %}
+<section class="page-head d-flex flex-column flex-md-row justify-content-between align-items-md-center gap-2">
+    <div>
+        <span class="eyebrow"><i class="bi bi-kanban-fill"></i>Project Board</span>
+        <h1 class="h3 mb-1">{{ project.name }} <span class="text-muted">({{ project.key }})</span></h1>
+        <p class="text-muted mb-0">{{ project.description|default:'No description provided.' }}</p>
+    </div>
+    <div class="d-flex flex-wrap gap-2">
+        <a href="{% url 'workspace_issue_create' workspace.slug project.pk %}" class="btn btn-primary btn-sm">New Issue</a>
+        <a href="{% url 'workspace_projects' workspace.slug %}" class="btn btn-outline-secondary btn-sm">All Projects</a>
+    </div>
+</section>
+
+<div class="row g-3 mb-3">
+    <div class="col-12 col-xl-8">
+        <div class="card h-100">
+            <div class="card-header fw-semibold d-flex justify-content-between align-items-center">
+                <span>Sprint Progress</span>
+                {% if active_sprint %}
+                    <span class="badge text-bg-primary">{{ active_sprint.name }} (Active)</span>
+                {% else %}
+                    <span class="badge text-bg-secondary">No active sprint</span>
+                {% endif %}
+            </div>
+            <div class="card-body">
+                {% if active_sprint %}
+                    <div class="small text-muted mb-2">
+                        {{ active_sprint.start_date }} to {{ active_sprint.end_date }}
+                        {% if active_sprint.goal %}| Goal: {{ active_sprint.goal }}{% endif %}
+                    </div>
+                {% endif %}
+
+                <div class="mb-2 d-flex justify-content-between small">
+                    <span>Completion</span>
+                    <span>{{ sprint_progress_pct }}%</span>
+                </div>
+                <div class="progress mb-3" role="progressbar" aria-valuenow="{{ sprint_progress_pct }}" aria-valuemin="0" aria-valuemax="100">
+                    <div class="progress-bar bg-success" style="width: {{ sprint_progress_pct }}%"></div>
+                </div>
+
+                <div class="row g-2 mb-3">
+                    <div class="col-6 col-md-3">
+                        <div class="meta-tile">
+                            <div class="label">Issues</div>
+                            <div class="value">{{ sprint_metrics.total_issues }}</div>
+                        </div>
+                    </div>
+                    <div class="col-6 col-md-3">
+                        <div class="meta-tile">
+                            <div class="label">Done</div>
+                            <div class="value text-success">{{ sprint_metrics.done_issues }}</div>
+                        </div>
+                    </div>
+                    <div class="col-6 col-md-3">
+                        <div class="meta-tile">
+                            <div class="label">Total Points</div>
+                            <div class="value">{{ sprint_metrics.total_points }}</div>
+                        </div>
+                    </div>
+                    <div class="col-6 col-md-3">
+                        <div class="meta-tile">
+                            <div class="label">Done Points</div>
+                            <div class="value text-success">{{ sprint_metrics.done_points }}</div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="vstack gap-2">
+                    {% for row in status_breakdown %}
+                        <div>
+                            <div class="d-flex justify-content-between small mb-1">
+                                <span>{{ row.label }}</span>
+                                <span>{{ row.count }}</span>
+                            </div>
+                            <div class="progress sprint-breakdown-bar">
+                                <div class="progress-bar {% if row.status == 'done' %}bg-success{% elif row.status == 'blocked' %}bg-danger{% elif row.status == 'in_progress' %}bg-warning{% else %}bg-info{% endif %}" style="width: {{ row.pct }}%"></div>
+                            </div>
+                        </div>
+                    {% empty %}
+                        <div class="text-muted small">No sprint metrics yet.</div>
+                    {% endfor %}
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="col-12 col-xl-4">
+        <div class="card h-100">
+            <div class="card-header fw-semibold">Sprints</div>
+            <div class="card-body">
+                {% if can_manage_projects %}
+                    <form method="post" action="{% url 'workspace_sprint_create' workspace.slug project.pk %}" class="row g-2 mb-3">
+                        {% csrf_token %}
+                        <div class="col-12">
+                            {{ sprint_form.name }}
+                        </div>
+                        <div class="col-12">
+                            {{ sprint_form.goal }}
+                        </div>
+                        <div class="col-6">
+                            {{ sprint_form.start_date }}
+                        </div>
+                        <div class="col-6">
+                            {{ sprint_form.end_date }}
+                        </div>
+                        <div class="col-8">
+                            {{ sprint_form.status }}
+                        </div>
+                        <div class="col-4">
+                            <button type="submit" class="btn btn-primary btn-sm w-100">Create</button>
+                        </div>
+                    </form>
+                {% endif %}
+
+                <div class="vstack gap-2">
+                    {% for sprint in sprints %}
+                        <div class="surface-block p-2 rounded-3">
+                            <div class="d-flex justify-content-between align-items-start gap-2">
+                                <div>
+                                    <div class="fw-semibold">{{ sprint.name }}</div>
+                                    <div class="small text-muted">{{ sprint.start_date }} to {{ sprint.end_date }}</div>
+                                </div>
+                                <span class="badge {% if sprint.status == 'active' %}text-bg-primary{% elif sprint.status == 'completed' %}text-bg-success{% else %}text-bg-secondary{% endif %}">
+                                    {{ sprint.get_status_display }}
+                                </span>
+                            </div>
+                            {% if can_manage_projects %}
+                                <div class="d-flex gap-2 mt-2">
+                                    {% if sprint.status != 'active' %}
+                                        <form method="post" action="{% url 'workspace_sprint_start' workspace.slug project.pk sprint.pk %}">
+                                            {% csrf_token %}
+                                            <button type="submit" class="btn btn-outline-primary btn-sm">Start</button>
+                                        </form>
+                                    {% endif %}
+                                    {% if sprint.status != 'completed' %}
+                                        <form method="post" action="{% url 'workspace_sprint_complete' workspace.slug project.pk sprint.pk %}">
+                                            {% csrf_token %}
+                                            <button type="submit" class="btn btn-outline-success btn-sm">Complete</button>
+                                        </form>
+                                    {% endif %}
+                                </div>
+                            {% endif %}
+                        </div>
+                    {% empty %}
+                        <div class="text-muted small">No sprints yet.</div>
+                    {% endfor %}
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="results-toolbar d-flex flex-column flex-lg-row justify-content-between align-items-lg-center gap-2 mb-3">
+    <div class="small text-muted d-flex align-items-center gap-2 flex-wrap">
+        <span class="fw-semibold text-light">Board Scope:</span>
+        <a href="{% url 'workspace_project_board' workspace.slug project.pk %}?scope=all" class="btn btn-sm {% if scope == 'all' %}btn-primary{% else %}btn-outline-light{% endif %}">All</a>
+        <a href="{% url 'workspace_project_board' workspace.slug project.pk %}?scope=active" class="btn btn-sm {% if scope == 'active' %}btn-primary{% else %}btn-outline-light{% endif %}">Active Sprint</a>
+        <a href="{% url 'workspace_project_board' workspace.slug project.pk %}?scope=backlog" class="btn btn-sm {% if scope == 'backlog' %}btn-primary{% else %}btn-outline-light{% endif %}">Backlog</a>
+    </div>
+    <div class="d-flex flex-wrap gap-2">
+        <span class="badge issue-priority issue-priority-low">Low</span>
+        <span class="badge issue-priority issue-priority-medium">Medium</span>
+        <span class="badge issue-priority issue-priority-high">High</span>
+        <span class="badge issue-priority issue-priority-critical">Critical</span>
+    </div>
+</div>
+
+<div class="kanban-grid mb-3">
+    {% for status_key, status_label in status_columns %}
+        <section class="card kanban-column">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <span class="fw-semibold">{{ status_label }}</span>
+                <span class="badge text-bg-secondary">{{ board|get_item:status_key|length }}</span>
+            </div>
+            <div class="card-body">
+                {% for issue in board|get_item:status_key %}
+                    <article class="kanban-card mb-2">
+                        <div class="d-flex justify-content-between gap-2">
+                            <a href="{% url 'workspace_issue_detail' workspace.slug project.pk issue.pk %}" class="fw-semibold text-decoration-none">
+                                {{ issue.issue_key }}
+                            </a>
+                            <span class="badge issue-priority issue-priority-{{ issue.priority }}">{{ issue.get_priority_display }}</span>
+                        </div>
+                        <p class="small mt-2 mb-1">{{ issue.title }}</p>
+                        <div class="small text-muted">
+                            {% if issue.assignee %}
+                                Assignee: {{ issue.assignee.username }}
+                            {% else %}
+                                Unassigned
+                            {% endif %}
+                        </div>
+                        <div class="small text-muted">
+                            Sprint:
+                            {% if issue.sprint %}
+                                {{ issue.sprint.name }}
+                            {% else %}
+                                Backlog
+                            {% endif %}
+                        </div>
+                        {% if issue.due_date %}
+                            <div class="small text-muted">Due: {{ issue.due_date }}</div>
+                        {% endif %}
+                    </article>
+                {% empty %}
+                    <div class="text-muted small">No issues.</div>
+                {% endfor %}
+            </div>
+        </section>
+    {% endfor %}
+</div>
+
+<div class="card">
+    <div class="card-header fw-semibold d-flex justify-content-between align-items-center">
+        <span>Recent Activity</span>
+        <button class="btn btn-sm btn-outline-secondary" type="button" data-bs-toggle="collapse" data-bs-target="#recentBoardActivity" aria-expanded="false" aria-controls="recentBoardActivity">
+            Toggle
+        </button>
+    </div>
+    <div id="recentBoardActivity" class="collapse">
+        <ul class="list-group list-group-flush">
+            {% for item in recent_activity %}
+                <li class="list-group-item d-flex justify-content-between align-items-start gap-2">
+                    <div class="small">
+                        <strong>{{ item.issue.issue_key }}</strong>
+                        <span class="text-muted">{{ item.action|capfirst }}</span>
+                        {% if item.from_value or item.to_value %}
+                            <span class="text-muted">({{ item.from_value|default:'-' }} &rarr; {{ item.to_value|default:'-' }})</span>
+                        {% endif %}
+                        {% if item.actor %}
+                            <div class="text-muted">by {{ item.actor.username }}</div>
+                        {% endif %}
+                    </div>
+                    <small class="text-muted text-nowrap">{{ item.created_at|timesince }} ago</small>
+                </li>
+            {% empty %}
+                <li class="list-group-item text-muted">No activity yet.</li>
+            {% endfor %}
+        </ul>
+    </div>
+</div>
+{% endblock %}

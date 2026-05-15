@@ -1,0 +1,45 @@
+{% extends 'base.html' %}
+
+{% block title %}Recommendations{% endblock %}
+
+{% block content %}
+<section class="page-head">
+    <span class="eyebrow"><i class="bi bi-stars"></i>Recommendations</span>
+    <h1 class="h3">Personalized Opportunities</h1>
+    <p class="text-muted mb-0">Ranked from your skills and saved filters.</p>
+</section>
+
+<div class="row g-3">
+    <div class="col-12 col-lg-6">
+        <div class="card h-100">
+            <div class="card-header fw-semibold">Top Help Requests</div>
+            <ul class="list-group list-group-flush">
+                {% for item in top_requests %}
+                    <li class="list-group-item">
+                        <a class="fw-semibold text-decoration-none" href="{% url 'request_detail' item.pk %}">{{ item.title }}</a>
+                        <div class="small text-muted">{{ item.skill_needed.name|default:'General' }} | {{ item.kp_bounty }} KP</div>
+                    </li>
+                {% empty %}
+                    <li class="list-group-item text-muted">No request recommendations yet.</li>
+                {% endfor %}
+            </ul>
+        </div>
+    </div>
+
+    <div class="col-12 col-lg-6">
+        <div class="card h-100">
+            <div class="card-header fw-semibold">Top Paid Jobs</div>
+            <ul class="list-group list-group-flush">
+                {% for item in top_jobs %}
+                    <li class="list-group-item">
+                        <a class="fw-semibold text-decoration-none" href="{% url 'freelance_job_detail' item.pk %}">{{ item.title }}</a>
+                        <div class="small text-muted">{{ item.skill_needed.name|default:'General' }} | &#8377;{{ item.budget_inr }}</div>
+                    </li>
+                {% empty %}
+                    <li class="list-group-item text-muted">No paid job recommendations yet.</li>
+                {% endfor %}
+            </ul>
+        </div>
+    </div>
+</div>
+{% endblock %}
